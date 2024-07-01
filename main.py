@@ -1,16 +1,29 @@
-# This is a sample Python script.
+#Glenys Password Hashing
+from flask import Flask, request, jsonify
+import bcrypt
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+app = Flask(__name__)
+@app.route('/register', methods=['POST'])
+def register():
+    username = request.form['username']
+    password = request.form['password']
+
+    salt = bcrypt.gensalt()
+
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
+
+    return jsonify({'message': 'User registered successfully'})
 
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form['username']
+    password = request.form['password']
 
+    if bcrypt.checkpw(password.encode('utf-8'), stored_hashed_password):
+        return jsonify({'message': 'Login successful'})
+    else:
+        return jsonify({'message': 'Invalid username or password'}), 401
 
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    print_hi("help me I'm dyinggggggggagagagagaga")
-# Cayden, Please... :crying_face:
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    app.run(debug=True)
