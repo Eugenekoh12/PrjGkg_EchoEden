@@ -9,7 +9,8 @@ app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'Ech03den'
 app.config['MYSQL_PASSWORD'] = 'Pan4will.FLEXmy7adviser'
 app.config['MYSQL_DB'] = 'echoeden'
-
+app.config['MYSQL_PORT'] = 3306
+mysql = MySQL(app)
 user_db = {}
 
 @app.route('/register', methods=['GET', 'POST'])
