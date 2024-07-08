@@ -4,7 +4,10 @@ import bcrypt
 from forms import RegistrationForm  # Import form
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'
+app.secret_key = 'the722semanticTOBOGGANS5smoothly.leutinizesTHEpointy3barrelOFgunpowder' #set_me_free_leave_me_be
+# Enter your database connection details below
+app.config['MYSQL_HOST'] = 'localhost'
+app.config['MYSQL_USER'] = 'Ech03den' #root
 
 user_db = {}
 
