@@ -59,7 +59,7 @@ def register():
         cursor.close()
 
         flash('Account created for {}! You can now log in.'.format(username), 'success')
-        return redirect(url_for('login'))did
+        return redirect(url_for('login'))
 
     return render_template('register.html', title='Register', form=form)
 
