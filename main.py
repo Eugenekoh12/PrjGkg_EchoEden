@@ -1,8 +1,10 @@
-#Glenys Password Hashing & input validation
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
-import bcrypt
-from forms import RegistrationForm  # Import form
-
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
+from flask_mysqldb import MySQL
+from flask_bcrypt import Bcrypt
+from forms import RegistrationForm
+bcrypt = Bcrypt()
+import MySQLdb.cursors
+import re
 app = Flask(__name__)
 app.secret_key = 'the722semanticTOBOGGANS5smoothly.leutinizesTHEpointy3barrelOFgunpowder'
 app.config['MYSQL_HOST'] = 'localhost'
