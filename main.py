@@ -103,7 +103,7 @@ def send_login_notification(email, success, ip_address):
     msg = Message(f'Login Attempt Notification - {status.capitalize()}',
                   sender=app.config['MAIL_USERNAME'],
                   recipients=[email])
-    msg.body = f"""Hello,
+    msg.body = f"""Dear User,
 
 A {status} login attempt was made on your EchoEden account.
 
@@ -114,7 +114,7 @@ Details:
 If this was you, you can ignore this message. If not, please take appropriate action to secure your account.
 
 Best regards,
-EchoEden Security Team
+Echo Eden Security Team
 """
     try:
         print(f"Attempting to send email to {email}")  # Debug print
