@@ -3,6 +3,7 @@ from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 from forms import RegistrationForm
 from flask_mail import Mail, Message
+from datetime import datetime
 import MySQLdb.cursors
 import re
 
@@ -20,10 +21,11 @@ mysql = MySQL(app)
 
 # Flask-Mail configuration
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 465
-app.config['MAIL_USE_SSL'] = True
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False
 app.config['MAIL_USERNAME'] = 'echoedenn@gmail.com'
-app.config['MAIL_PASSWORD'] = 'echoeden123'
+app.config['MAIL_PASSWORD'] = 'edls docn byvz qcgd'
 mail = Mail(app)
 
 
@@ -76,17 +78,18 @@ def login():
 
         if not account:
             flash('Invalid username or password', 'danger')
+            send_login_notification(username, False, request.remote_addr)
             return redirect(url_for('login'))
 
         stored_hashed_password = account['password_hash']
 
         if bcrypt.check_password_hash(stored_hashed_password, password):
             flash('Login successful!', 'success')
-            # Send email notification
-            send_login_notification(account['email'], username)
+            send_login_notification(account['email'], True, request.remote_addr)
             return redirect(url_for('home'))
         else:
             flash('Invalid username or password', 'danger')
+            send_login_notification(account['email'], False, request.remote_addr)
             return redirect(url_for('login'))
 
     return render_template('login.html', title='Login')
@@ -95,12 +98,31 @@ def login():
 def home():
     return "Welcome to the Home Page"
 
-def send_login_notification(email, username):
-    msg = Message('Login Attempt Notification',
-                  sender='your-email@gmail.com',
+def send_login_notification(email, success, ip_address):
+    status = "successful" if success else "failed"
+    msg = Message(f'Login Attempt Notification - {status.capitalize()}',
+                  sender=app.config['MAIL_USERNAME'],
                   recipients=[email])
-    msg.body = f"Hello {username},\n\nSomeone has attempted to log into your account on ExampleApp. If this was you, you can ignore this message. If not, please take appropriate action."
-    mail.send(msg)
+    msg.body = f"""Hello,
+
+A {status} login attempt was made on your EchoEden account.
+
+Details:
+- Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+- IP Address: {ip_address}
+
+If this was you, you can ignore this message. If not, please take appropriate action to secure your account.
+
+Best regards,
+EchoEden Security Team
+"""
+    try:
+        print(f"Attempting to send email to {email}")  # Debug print
+        mail.send(msg)
+        print(f"Email sent successfully to {email}")  # Debug print
+    except Exception as e:
+        print(f"Failed to send email notification to {email}: {str(e)}")  # Debug print
+        app.logger.error(f"Failed to send email notification to {email}: {str(e)}")
 
 
 if __name__ == '__main__':
