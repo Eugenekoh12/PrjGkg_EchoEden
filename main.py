@@ -63,8 +63,20 @@ def login():
 
     return render_template('login.html', title='Login')
 
+# Manual Test Function
+def test_password_hashing():
+    password = "my_secretpassword"
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
+    print("Original Password:", password)
+    print("Salt:", salt)
+    print("Hashed Password:", hashed_password)
+    print("Check Hashing:", bcrypt.checkpw(password.encode('utf-8'), hashed_password))
+
 if __name__ == '__main__':
+    test_password_hashing()  # Run the manual test
     app.run(debug=True)
+
 
 
 
