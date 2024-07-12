@@ -105,7 +105,7 @@ def send_login_notification(email, success, ip_address):
                   recipients=[email])
     msg.body = f"""Dear User,
 
-A {status} login attempt was made on your EchoEden account.
+A {status} login attempt was made on your Echo Eden account.
 
 Details:
 - Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
