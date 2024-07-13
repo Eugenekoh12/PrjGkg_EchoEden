@@ -117,11 +117,11 @@ Best regards,
 Echo Eden Security Team
 """
     try:
-        print(f"Attempting to send email to {email}")  # Debug print
+        print(f"Attempting to send email to {email}")
         mail.send(msg)
-        print(f"Email sent successfully to {email}")  # Debug print
+        print(f"Email sent successfully to {email}")
     except Exception as e:
-        print(f"Failed to send email notification to {email}: {str(e)}")  # Debug print
+        print(f"Failed to send email notification to {email}: {str(e)}")
         app.logger.error(f"Failed to send email notification to {email}: {str(e)}")
 
 
