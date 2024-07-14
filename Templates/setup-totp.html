@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Setup TOTP</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <h1>Setup TOTP</h1>
+    <p>Scan the QR code with your 2FA app:</p>
+    <img src="data:image/png;base64,{{ img_b64 }}" alt="QR Code">
+    <p>Or manually enter this secret key into your 2FA app: {{ secret }}</p>
+    <form method="POST">
+        <label for="token">Enter the current TOTP from your 2FA app:</label>
+        <input type="text" id="token" name="token">
+        <input type="submit" value="Verify">
+    </form>
+</body>
+</html>

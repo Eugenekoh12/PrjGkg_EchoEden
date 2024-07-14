@@ -4,11 +4,7 @@ from flask_bcrypt import Bcrypt
 from forms import RegistrationForm
 from flask_mail import Mail, Message
 from datetime import datetime
-import MySQLdb.cursors
-import re
-
-import json
-import requests
+import MySQLdb.cursors, re, json, requests, pyotp, time, qrcode
 from authlib.integrations.flask_client import OAuth
 
 app = Flask(__name__)
@@ -88,10 +84,18 @@ def login():
         stored_hashed_password = account['password_hash']
 
         if bcrypt.check_password_hash(stored_hashed_password, password):
-            session['user'] = {'username': username, 'email': account['email']}
-            flash('Login successful!', 'success')
-            send_login_notification(account['email'], True, request.remote_addr, "Regular Login")
-            return redirect(url_for('home'))
+            cursor.execute("SELECT * FROM account_settings WHERE user_id = %s", (account['id'],))
+            settings = cursor.fetchone()
+            cursor.close()
+
+            if settings and settings['2fa_token_totp']:
+                session['tmp_user'] = {'username': username, 'password_hash': stored_hashed_password}
+                return redirect(url_for('verify_totp'))
+            else:
+                session['user'] = {'username': username, 'email': account['email']}
+                flash('Login successful!', 'success')
+                send_login_notification(account['email'], True, request.remote_addr, "Regular Login")
+                return redirect(url_for('home'))
         else:
             flash('Invalid username or password', 'danger')
             send_login_notification(account['email'], False, request.remote_addr, "Regular Login")
@@ -210,6 +214,73 @@ def logout():
 # if __name__ == "__main__":
 #     app.run(host="0.0.0.0", port=appConf.get(
 #         "FLASK_PORT"), debug=True)
+
+@app.route('/setup-totp', methods=['GET', 'POST'])
+def setup_totp():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    username = session['user']['username']
+
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
+    account = cursor.fetchone()
+
+    cursor.execute("SELECT * FROM account_settings WHERE user_id = %s", (account['id'],))
+    settings = cursor.fetchone()
+
+    if request.method == 'POST':
+        token = request.form['token']
+        if pyotp.TOTP(settings['2fa_token_totp']).verify(token):
+            flash('2FA setup successful!', 'success')
+            return redirect(url_for('home'))
+        else:
+            flash('Invalid token', 'danger')
+
+    if settings and settings['2fa_token_totp']:
+        secret = settings['2fa_token_totp']
+    else:
+        secret = pyotp.random_base32()
+        cursor.execute("UPDATE account_settings SET 2fa_token_totp = %s WHERE user_id = %s", (secret, account['id'],))
+        mysql.connection.commit()
+
+    uri = pyotp.totp.TOTP(secret).provisioning_uri(name=username, issuer_name='EchoEden')
+    img = qrcode.make(uri)
+    stream = io.BytesIO()
+    img.save(stream, 'PNG')
+    stream.seek(0)
+    img_b64 = base64.b64encode(stream.read()).decode()
+
+    cursor.close()
+
+    return render_template('setup_totp.html', img_b64=img_b64, secret=secret)
+
+@app.route('/verify-totp', methods=['GET', 'POST'])
+def verify_totp():
+    if 'tmp_user' not in session:
+        return redirect(url_for('login'))
+
+    username = session['tmp_user']['username']
+
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
+    account = cursor.fetchone()
+
+    cursor.execute("SELECT * FROM account_settings WHERE user_id = %s", (account['id'],))
+    settings = cursor.fetchone()
+    cursor.close()
+
+    if request.method == 'POST':
+        token = request.form['token']
+        if pyotp.TOTP(settings['2fa_token_totp']).verify(token):
+            session['user'] = session['tmp_user']
+            del session['tmp_user']
+            flash('Login successful!', 'success')
+            return redirect(url_for('home'))
+        else:
+            flash('Invalid token', 'danger')
+
+    return render_template('verify_totp.html')
 
 if __name__ == "__main__":
     app.run(debug=True)
