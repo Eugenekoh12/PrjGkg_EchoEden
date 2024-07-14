@@ -4,7 +4,7 @@ from flask_bcrypt import Bcrypt
 from forms import RegistrationForm
 from flask_mail import Mail, Message
 from datetime import datetime
-import MySQLdb.cursors, re, json, requests, pyotp, time, qrcode
+import MySQLdb.cursors, re, json, requests, pyotp, time, qrcode, io, base64
 from authlib.integrations.flask_client import OAuth
 
 app = Flask(__name__)
@@ -56,6 +56,16 @@ def register():
         cursor.execute(
             "INSERT INTO accounts (username, email, password_hash, settings_id) VALUES (%s, %s, %s, %s)",
             (username, email, hashed_password, settings_id)
+        )
+        mysql.connection.commit()
+
+        # Get the user's ID
+        user_id = cursor.lastrowid
+
+        # Insert a new record into the account_settings table for the new user
+        cursor.execute(
+            "INSERT INTO account_settings (user_id) VALUES (%s)",
+            (user_id,)
         )
         mysql.connection.commit()
         cursor.close()
