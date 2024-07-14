@@ -77,3 +77,17 @@ button:hover {
     background-color: #f8d7da;
     color: #721c24;
 }
+
+.float-container {
+    border: 0;
+    padding: 20px;
+}
+
+.float-child {
+    width: 45%;
+    float: left;
+    padding: 10px;
+    border: 0;
+}
+
+span.clear { clear: left; display: block; }

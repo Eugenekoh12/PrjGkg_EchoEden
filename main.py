@@ -101,7 +101,7 @@ def login():
             send_login_notification(account['email'], False, request.remote_addr, "Regular Login")
             return redirect(url_for('login'))
 
-    return render_template('login.html', title='Login')
+    return render_template('home_login_new.html', title='Login')
 
 # @app.route('/home')
 # def home():
@@ -194,7 +194,7 @@ def googleCallback():
 
 @app.route("/")
 def home():
-    return render_template("homel.html", session=session.get("user"),
+    return render_template("home_login_new.html", session=session.get("user"),
                            pretty=json.dumps(session.get("user"), indent=4))
 
 
