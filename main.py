@@ -88,6 +88,7 @@ def login():
         stored_hashed_password = account['password_hash']
 
         if bcrypt.check_password_hash(stored_hashed_password, password):
+            session['user'] = {'username': username, 'email': account['email']}  # Store user info in session
             flash('Login successful!', 'success')
             send_login_notification(account['email'], True, request.remote_addr)
             return redirect(url_for('home'))
@@ -96,7 +97,7 @@ def login():
             send_login_notification(account['email'], False, request.remote_addr)
             return redirect(url_for('login'))
 
-    return render_template('homel.html', title='Login')
+    return render_template('login.html', title='Login')
 
 # @app.route('/home')
 # def home():
