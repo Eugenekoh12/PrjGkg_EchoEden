@@ -82,19 +82,19 @@ def login():
 
         if not account:
             flash('Invalid username or password', 'danger')
-            send_login_notification(username, False, request.remote_addr)
+            send_login_notification(username, False, request.remote_addr, "Regular Login")
             return redirect(url_for('login'))
 
         stored_hashed_password = account['password_hash']
 
         if bcrypt.check_password_hash(stored_hashed_password, password):
-            session['user'] = {'username': username, 'email': account['email']}  # Store user info in session
+            session['user'] = {'username': username, 'email': account['email']}
             flash('Login successful!', 'success')
-            send_login_notification(account['email'], True, request.remote_addr)
+            send_login_notification(account['email'], True, request.remote_addr, "Regular Login")
             return redirect(url_for('home'))
         else:
             flash('Invalid username or password', 'danger')
-            send_login_notification(account['email'], False, request.remote_addr)
+            send_login_notification(account['email'], False, request.remote_addr, "Regular Login")
             return redirect(url_for('login'))
 
     return render_template('login.html', title='Login')
@@ -103,14 +103,14 @@ def login():
 # def home():
 #     return "Welcome to the Home Page"
 
-def send_login_notification(email, success, ip_address):
+def send_login_notification(email, success, ip_address, login_type):
     status = "successful" if success else "failed"
     msg = Message(f'Login Attempt Notification - {status.capitalize()}',
                   sender=app.config['MAIL_USERNAME'],
                   recipients=[email])
     msg.body = f"""Dear User,
 
-A {status} login attempt was made on your Echo Eden account.
+A {status} login attempt was made on your Echo Eden account using {login_type}.
 
 Details:
 - Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
@@ -128,6 +128,7 @@ Echo Eden Security Team
     except Exception as e:
         print(f"Failed to send email notification to {email}: {str(e)}")
         app.logger.error(f"Failed to send email notification to {email}: {str(e)}")
+
 
 
 # https://www.youtube.com/watch?v=fZLWO3_V06Q - reference video
@@ -157,22 +158,34 @@ oauth.register(
 
 @app.route("/signin-google")
 def googleCallback():
-    # fetch access token and id token using authorization code
-    token = oauth.myApp.authorize_access_token()
+    try:
+        token = oauth.myApp.authorize_access_token()
 
-    # google people API - https://developers.google.com/people/api/rest/v1/people/get
-    # Google OAuth 2.0 playground - https://developers.google.com/oauthplayground
-    # make sure you enable the Google People API in the Google Developers console under "Enabled APIs & services" section
+        # google people API - https://developers.google.com/people/api/rest/v1/people/get
+        # Google OAuth 2.0 playground - https://developers.google.com/oauthplayground
+        # make sure you enable the Google People API in the Google Developers console under "Enabled APIs & services" section
+        personDataUrl = "https://people.googleapis.com/v1/people/me?personFields=genders,birthdays,emailAddresses"
+        personData = requests.get(personDataUrl, headers={
+            "Authorization": f"Bearer {token['access_token']}"
+        }).json()
+        token["personData"] = personData
 
-    # fetch user data with access token
-    personDataUrl = "https://people.googleapis.com/v1/people/me?personFields=genders,birthdays"
-    personData = requests.get(personDataUrl, headers={
-        "Authorization": f"Bearer {token['access_token']}"
-    }).json()
-    token["personData"] = personData
-    # set complete user information in the session
-    session["user"] = token
-    return redirect(url_for("home"))
+        session["user"] = token
+
+        # Extract email from personData
+        email = personData.get('emailAddresses', [{}])[0].get('value')
+
+        if email:
+            send_login_notification(email, True, request.remote_addr, "Google Login")
+        else:
+            print("No email found in Google account data")
+
+        flash('Google Login successful!', 'success')
+        return redirect(url_for("home"))
+    except Exception as e:
+        print(f"Google login failed: {str(e)}")
+        flash('Google Login failed', 'danger')
+        return redirect(url_for("home"))
 
 
 @app.route("/")
