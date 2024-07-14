@@ -138,7 +138,7 @@ appConf = {
     "FLASK_PORT": 5000
 }
 
-app.secret_key = appConf.get("FLASK_SECRET")
+
 
 oauth = OAuth(app)
 # list of google scopes - https://developers.google.com/identity/protocols/oauth2/scopes
