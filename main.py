@@ -74,7 +74,6 @@ def login():
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
         account = cursor.fetchone()
-        cursor.close()
 
         if not account:
             flash('Invalid username or password', 'danger')
@@ -123,7 +122,7 @@ Details:
 If this was you, you can ignore this message. If not, please take appropriate action to secure your account.
 
 Best regards,
-Echo Eden Security Team
+Echo Eden
 """
     try:
         print(f"Attempting to send email to {email}")
