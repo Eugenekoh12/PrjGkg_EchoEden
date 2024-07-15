@@ -191,9 +191,12 @@ def googleCallback():
         token["personData"] = personData
 
         session["user"] = token
+        hashed_token = bcrypt.generate_password_hash(json.dumps(token)).decode('utf-8')  # Hash the token
+        session["oauth_token"] = hashed_token  # Store the hashed token in the session
 
         # Extract email from personData
         email = personData.get('emailAddresses', [{}])[0].get('value')
+        session['email'] = email
 
         if email:
             send_login_notification(email, True, request.remote_addr, "Google Login")
@@ -213,7 +216,6 @@ def home():
     return render_template("home.html", session=session.get("user"),
                            pretty=json.dumps(session.get("user"), indent=4))
 
-
 @app.route("/google-login")
 def googleLogin():
     if "user" in session:
@@ -221,14 +223,12 @@ def googleLogin():
         # Need to inform user they're logged in.
     return oauth.myApp.authorize_redirect(redirect_uri=url_for("googleCallback", _external=True))
 
-
 @app.route("/logout")
 def logout():
     session['2fa'] = None
     session['username'] = None
     session.pop("user", None)
     return redirect(url_for("home"))
-
 
 # if __name__ == "__main__":
 #     app.run(host="0.0.0.0", port=appConf.get(
@@ -303,6 +303,54 @@ def verify_totp():
             flash('Invalid token', 'warning')
 
     return render_template('verify_totp.html')
+
+@app.route('/oauth_username', methods=['GET', 'POST'])
+def oauth_username():
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        username = form.username.data
+        email = session['email']
+        password = bcrypt.generate_password_hash('random_password').decode('utf-8')  # Generate a random password
+        hashed_token = session['oauth_token']  # Retrieve the hashed token from the session
+
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
+        account = cursor.fetchone()
+
+        if account:
+            flash('Username already exists', 'warning')
+            return redirect(url_for('oauth_username'))
+
+        # Insert a new record into the settings table and get the settings_id
+        cursor.execute("INSERT INTO settings (theme) VALUES (0)")
+        mysql.connection.commit()
+        settings_id = cursor.lastrowid
+        session['username'] = username
+
+        # Insert new user into the accounts table and get the user_id
+        cursor.execute(
+            "INSERT INTO accounts (username, email, password_hash, settings_id) VALUES (%s, %s, %s, %s)",
+            (username, email, password, settings_id)
+        )
+        mysql.connection.commit()
+        user_id = cursor.lastrowid
+
+        # Insert a new record into the account_settings table for the new user
+        cursor.execute(
+            "INSERT INTO account_settings (user_id, oauth_token) VALUES (%s, %s)",
+            (user_id, hashed_token)  # Store the hashed token in the account_settings table
+        )
+        cursor.execute(
+            "INSERT INTO associates (user_id) VALUES (%s)",
+            (user_id,)
+        )
+        mysql.connection.commit()
+        cursor.close()
+
+        flash('Account created for {}! You can now log in.'.format(username), 'success')
+        return redirect(url_for('home'))
+
+    return render_template('oauth_username.html', title='Choose Username', form=form)
 
 if __name__ == "__main__":
     app.run(debug=True)
