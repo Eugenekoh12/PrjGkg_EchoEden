@@ -4,9 +4,8 @@
     {% block head %}
     <title>
         {% block title %}{% endblock %}
-        {% if self.title() is defined %} - EchoEden
-        {% else %}EchoEden
-        {% endif %}
+        {% if self.title() is defined %} -
+        {% endif %}EchoEden
     </title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     {% endblock %}

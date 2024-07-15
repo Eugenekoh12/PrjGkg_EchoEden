@@ -103,7 +103,6 @@ def login():
             cursor.close()
 
             if settings and settings['2fa_token_totp']:
-                session['2fa'] = True
                 session['tmp_user'] = {'username': username, 'password_hash': stored_hashed_password}
                 return redirect(url_for('verify_totp'))
             else:
@@ -252,6 +251,7 @@ def setup_totp():
     if request.method == 'POST':
         token = request.form['token']
         if pyotp.TOTP(settings['2fa_token_totp']).verify(token):
+            session['2fa'] = True
             flash('2FA setup successful!', 'success')
             return redirect(url_for('home'))
         else:
@@ -293,6 +293,7 @@ def verify_totp():
     if request.method == 'POST':
         token = request.form['token']
         if pyotp.TOTP(settings['2fa_token_totp']).verify(token):
+            session['2fa'] = True
             session['username'] = username
             session['user'] = session['tmp_user']
             del session['tmp_user']
