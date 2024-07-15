@@ -198,13 +198,23 @@ def googleCallback():
         email = personData.get('emailAddresses', [{}])[0].get('value')
         session['email'] = email
 
-        if email:
-            send_login_notification(email, True, request.remote_addr, "Google Login")
-        else:
-            print("No email found in Google account data")
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("SELECT * FROM accounts WHERE email = %s", (email,))
+        account = cursor.fetchone()
 
-        flash('Google Login successful!', 'success')
-        return redirect(url_for("home"))
+        if account:
+            # If an account with the email already exists, log in with the existing username
+            session['username'] = account['username']
+            flash('Login successful!', 'success')
+            return redirect(url_for('home'))
+        else:
+            if email:
+                send_login_notification(email, True, request.remote_addr, "Google Login")
+            else:
+                print("No email found in Google account data")
+
+            flash('Google Login successful!', 'success')
+            return redirect(url_for("oauth_username"))
     except Exception as e:
         print(f"Google login failed: {str(e)}")
         flash(f'Google login failed: {str(e)}', 'warning')
@@ -304,7 +314,7 @@ def verify_totp():
 
     return render_template('verify_totp.html')
 
-@app.route('/oauth_username', methods=['GET', 'POST'])
+@app.route('/oauth-username', methods=['GET', 'POST'])
 def oauth_username():
     form = RegistrationForm()
     if form.validate_on_submit():
@@ -351,6 +361,9 @@ def oauth_username():
         return redirect(url_for('home'))
 
     return render_template('oauth_username.html', title='Choose Username', form=form)
+
+for rule in app.url_map.iter_rules():
+    print(rule)
 
 if __name__ == "__main__":
     app.run(debug=True)
