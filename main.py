@@ -230,6 +230,7 @@ def home():
 def googleLogin():
     if "user" in session:
         abort(404)
+    # if you are cayden comment the if statement cuz SOMEHOW IT DOESN'T WORK FOR HIM
         # Need to inform user they're logged in.
     return oauth.myApp.authorize_redirect(redirect_uri=url_for("googleCallback", _external=True))
 
