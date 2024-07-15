@@ -28,6 +28,9 @@ app.config['MAIL_USERNAME'] = 'echoedenn@gmail.com'
 app.config['MAIL_PASSWORD'] = 'edls docn byvz qcgd'
 mail = Mail(app)
 
+@app.context_processor
+def inject_now():
+    return {'now': datetime.utcnow()}
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -42,7 +45,7 @@ def register():
         account = cursor.fetchone()
 
         if account:
-            flash('Username already exists', 'danger')
+            flash('Username already exists', 'warning')
             return redirect(url_for('register'))
 
         hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
@@ -73,7 +76,7 @@ def register():
         cursor.close()
 
         flash('Account created for {}! You can now log in.'.format(username), 'success')
-        return redirect(url_for('login'))
+        return redirect(url_for('home'))
 
     return render_template('register.html', title='Register', form=form)
 
@@ -88,7 +91,7 @@ def login():
         account = cursor.fetchone()
 
         if not account:
-            flash('Invalid username or password', 'danger')
+            flash('Invalid username or password', 'warning')
             send_login_notification(username, False, request.remote_addr, "Regular Login")
             return redirect(url_for('login'))
 
@@ -100,15 +103,18 @@ def login():
             cursor.close()
 
             if settings and settings['2fa_token_totp']:
+                session['2fa'] = True
                 session['tmp_user'] = {'username': username, 'password_hash': stored_hashed_password}
                 return redirect(url_for('verify_totp'))
             else:
+                session['2fa'] = False
+                session['username'] = username
                 session['user'] = {'username': username, 'email': account['email']}
                 flash('Login successful!', 'success')
                 send_login_notification(account['email'], True, request.remote_addr, "Regular Login")
                 return redirect(url_for('home'))
         else:
-            flash('Invalid username or password', 'danger')
+            flash('Invalid username or password', 'warning')
             send_login_notification(account['email'], False, request.remote_addr, "Regular Login")
             return redirect(url_for('login'))
 
@@ -199,13 +205,13 @@ def googleCallback():
         return redirect(url_for("home"))
     except Exception as e:
         print(f"Google login failed: {str(e)}")
-        flash('Google Login failed', 'danger')
+        flash('Google Login failed', 'warning')
         return redirect(url_for("home"))
 
 
 @app.route("/")
 def home():
-    return render_template("home_login_new.html", session=session.get("user"),
+    return render_template("home.html", session=session.get("user"),
                            pretty=json.dumps(session.get("user"), indent=4))
 
 
@@ -213,11 +219,14 @@ def home():
 def googleLogin():
     if "user" in session:
         abort(404)
+        # Need to inform user they're logged in.
     return oauth.myApp.authorize_redirect(redirect_uri=url_for("googleCallback", _external=True))
 
 
 @app.route("/logout")
 def logout():
+    session['2fa'] = None
+    session['username'] = None
     session.pop("user", None)
     return redirect(url_for("home"))
 
@@ -246,7 +255,7 @@ def setup_totp():
             flash('2FA setup successful!', 'success')
             return redirect(url_for('home'))
         else:
-            flash('Invalid token', 'danger')
+            flash('Invalid token', 'warning')
 
     if settings and settings['2fa_token_totp']:
         secret = settings['2fa_token_totp']
@@ -284,19 +293,15 @@ def verify_totp():
     if request.method == 'POST':
         token = request.form['token']
         if pyotp.TOTP(settings['2fa_token_totp']).verify(token):
+            session['username'] = username
             session['user'] = session['tmp_user']
             del session['tmp_user']
             flash('Login successful!', 'success')
             return redirect(url_for('home'))
         else:
-            flash('Invalid token', 'danger')
+            flash('Invalid token', 'warning')
 
     return render_template('verify_totp.html')
 
 if __name__ == "__main__":
     app.run(debug=True)
-
-
-
-
-

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block notif_notify %}
+    {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <p>{{ message }}</p></br>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+{% endblock %}
+
+{% block notif_warning %}
+    {% with warnings = get_flashed_messages(category_filter=["warning"]) %}
+            {% if warnings %}
+                {% for message in warnings %}
+                    <p>{{ message }}</p></br>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+{% endblock %}
+
+{% block content %}
+    <h2>
+        {% if session['username'] is defined %}
+            Hi, {{ session['username'] }}!
+        {% endif %}
+        Welcome to EchoEden!
+    </h2>
+        {% if session['username'] is defined %}
+            {% if session['2fa'] %}
+            {% else %}
+                <p><a href="{{url_for('setup_totp')}}">Setup 2FA (TOTP)</a></p>
+            {% endif %}
+            <p><a href="{{url_for('logout')}}">Logout</a></p>
+        {% endif %}
+        {% if session['username'] is not defined %}
+            <p><a href="{{url_for('login')}}">Login</a> or <a href="{{url_for('register')}}">Register</a> with us.</p>
+        {% endif %}
+{% endblock %}

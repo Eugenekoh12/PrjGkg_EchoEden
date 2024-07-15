@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+  <head>
+    {% block head %}
+    <title>
+        {% block title %}{% endblock %}
+        {% if self.title() is defined %} - EchoEden
+        {% else %}EchoEden
+        {% endif %}
+    </title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    {% endblock %}
+  </head>
+  <body>
+    <div id="notifications">
+        {% block notif_notify %}{% endblock %}{% if self.notif_notify() is defined %}</br>{% endif %}
+        {% block notif_warning %}{% endblock %}{% if self.notif_warning() is defined %}</br>{% endif %}
+    </div>
+    <div id="content">{% block content %}{% endblock %}</div>
+    <div id="footer">
+      {% block footer %}
+      &copy; Copyright 2024 - {{now.year}} by <a href="http://echoeden.draek.dev/">EchoEden</a>.
+      {% endblock %}
+    </div>
+  </body>
+</html>
