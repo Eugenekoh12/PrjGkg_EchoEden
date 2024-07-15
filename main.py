@@ -204,7 +204,7 @@ def googleCallback():
         return redirect(url_for("home"))
     except Exception as e:
         print(f"Google login failed: {str(e)}")
-        flash('Google Login failed', 'warning')
+        flash(f'Google login failed: {str(e)}', 'warning')
         return redirect(url_for("home"))
 
 
