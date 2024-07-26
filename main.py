@@ -181,7 +181,7 @@ Echo Eden
     except Exception as e:
         print(f"Failed to send email notification to {email}: {str(e)}")
         app.logger.error(f"Failed to send email notification to {email}: {str(e)}")
-
+#session
 @app.route('/session-history')
 @login_required
 def session_history():
