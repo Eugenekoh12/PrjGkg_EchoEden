@@ -3,9 +3,11 @@ from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 from forms import RegistrationForm
 from flask_mail import Mail, Message
-from datetime import datetime
+from datetime import datetime, timedelta
 import MySQLdb.cursors, re, json, requests, pyotp, time, qrcode, io, base64
 from authlib.integrations.flask_client import OAuth
+from functools import wraps
+import uuid
 
 app = Flask(__name__)
 bcrypt = Bcrypt(app)
@@ -31,6 +33,29 @@ mail = Mail(app)
 @app.context_processor
 def inject_now():
     return {'now': datetime.utcnow()}
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'session_id' not in session:
+            return redirect(url_for('login'))
+
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("SELECT * FROM user_sessions WHERE session_id = %s", (session['session_id'],))
+        user_session = cursor.fetchone()
+
+        if not user_session:
+            return redirect(url_for('login'))
+
+        # Update last activity
+        cursor.execute("UPDATE user_sessions SET last_activity = CURRENT_TIMESTAMP WHERE session_id = %s",
+                       (session['session_id'],))
+        mysql.connection.commit()
+
+        return f(*args, **kwargs)
+
+    return decorated_function
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -80,6 +105,7 @@ def register():
 
     return render_template('register.html', title='Register', form=form)
 
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -90,38 +116,45 @@ def login():
         cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
         account = cursor.fetchone()
 
-        if not account:
-            flash('Invalid username or password', 'warning')
-            send_login_notification(username, False, request.remote_addr, "Regular Login")
-            return redirect(url_for('login'))
+        if account and bcrypt.check_password_hash(account['password_hash'], password):
+            # Check for existing active sessions
+            cursor.execute("SELECT * FROM user_sessions WHERE user_id = %s AND last_activity > %s",
+                           (account['id'], datetime.now() - timedelta(minutes=30)))
+            existing_session = cursor.fetchone()
 
-        stored_hashed_password = account['password_hash']
+            if existing_session:
+                # Invalidate previous session
+                cursor.execute("UPDATE user_sessions SET status = 'logged_out' WHERE user_id = %s", (account['id'],))
+                mysql.connection.commit()
+                flash('Previous session has been logged out.', 'info')
 
-        if bcrypt.check_password_hash(stored_hashed_password, password):
-            cursor.execute("SELECT * FROM account_settings WHERE user_id = %s", (account['id'],))
-            settings = cursor.fetchone()
-            cursor.close()
+            # Generate a unique session ID
+            session_id = str(uuid.uuid4())
 
-            if settings and settings['2fa_token_totp']:
-                session['tmp_user'] = {'username': username, 'password_hash': stored_hashed_password}
-                return redirect(url_for('verify_totp'))
-            else:
-                session['2fa'] = False
-                session['username'] = username
-                session['user'] = {'username': username, 'email': account['email']}
-                flash('Login successful!', 'success')
-                send_login_notification(account['email'], True, request.remote_addr, "Regular Login")
-                return redirect(url_for('home'))
+            # Store session details in the database
+            session_data = {
+                'user_id': account['id'],
+                'username': account['username'],
+                'login_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            cursor.execute("""
+                INSERT INTO user_sessions (session_id, user_id, ip_address, user_agent, data, status)
+                VALUES (%s, %s, %s, %s, %s, 'active')
+            """, (session_id, account['id'], request.remote_addr, request.user_agent.string, json.dumps(session_data)))
+            mysql.connection.commit()
+
+            # Store session ID in Flask session
+            session['session_id'] = session_id
+            session['user_id'] = account['id']
+            session['username'] = account['username']
+
+            flash('Login successful!', 'success')
+            return redirect(url_for('home'))  # This line ensures redirection to home page
         else:
             flash('Invalid username or password', 'warning')
-            send_login_notification(account['email'], False, request.remote_addr, "Regular Login")
-            return redirect(url_for('login'))
 
     return render_template('login.html', title='Login')
 
-# @app.route('/home')
-# def home():
-#     return "Welcome to the Home Page"
 
 def send_login_notification(email, success, ip_address, login_type):
     status = "successful" if success else "failed"
@@ -149,6 +182,17 @@ Echo Eden
         print(f"Failed to send email notification to {email}: {str(e)}")
         app.logger.error(f"Failed to send email notification to {email}: {str(e)}")
 
+@app.route('/session-history')
+@login_required
+def session_history():
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("""
+        SELECT * FROM user_sessions 
+        WHERE user_id = %s 
+        ORDER BY last_activity DESC
+    """, (session['user_id'],))
+    sessions = cursor.fetchall()
+    return render_template('session_history.html', sessions=sessions)
 
 
 # https://www.youtube.com/watch?v=fZLWO3_V06Q - reference video
@@ -181,18 +225,11 @@ def googleCallback():
     try:
         token = oauth.myApp.authorize_access_token()
 
-        # google people API - https://developers.google.com/people/api/rest/v1/people/get
-        # Google OAuth 2.0 playground - https://developers.google.com/oauthplayground
-        # make sure you enable the Google People API in the Google Developers console under "Enabled APIs & services" section
         personDataUrl = "https://people.googleapis.com/v1/people/me?personFields=genders,birthdays,emailAddresses"
         personData = requests.get(personDataUrl, headers={
             "Authorization": f"Bearer {token['access_token']}"
         }).json()
         token["personData"] = personData
-
-        session["user"] = token
-        hashed_token = bcrypt.generate_password_hash(json.dumps(token)).decode('utf-8')  # Hash the token
-        session["oauth_token"] = hashed_token  # Store the hashed token in the session
 
         # Extract email from personData
         email = personData.get('emailAddresses', [{}])[0].get('value')
@@ -203,18 +240,63 @@ def googleCallback():
         account = cursor.fetchone()
 
         if account:
-            # If an account with the email already exists, log in with the existing username
+            # If an account with the email already exists, log in with the existing account
             session['username'] = account['username']
-            flash('Login successful!', 'success')
-            return redirect(url_for('home'))
+            user_id = account['id']
         else:
-            if email:
-                send_login_notification(email, True, request.remote_addr, "Google Login")
-            else:
-                print("No email found in Google account data")
+            # Create a new account
+            username = f"user_{uuid.uuid4().hex[:8]}"  # Generate a temporary username
+            hashed_password = bcrypt.generate_password_hash('temporary_password').decode('utf-8')
 
-            flash('Google Login successful!', 'success')
-            return redirect(url_for("oauth_username"))
+            cursor.execute("INSERT INTO settings (theme) VALUES (0)")
+            mysql.connection.commit()
+            settings_id = cursor.lastrowid
+
+            cursor.execute(
+                "INSERT INTO accounts (username, email, password_hash, settings_id) VALUES (%s, %s, %s, %s)",
+                (username, email, hashed_password, settings_id)
+            )
+            mysql.connection.commit()
+            user_id = cursor.lastrowid
+
+            cursor.execute(
+                "INSERT INTO account_settings (user_id) VALUES (%s)",
+                (user_id,)
+            )
+            cursor.execute(
+                "INSERT INTO associates (user_id) VALUES (%s)",
+                (user_id,)
+            )
+            mysql.connection.commit()
+
+            session['username'] = username
+
+        # Generate a unique session ID
+        session_id = str(uuid.uuid4())
+
+        # Store session details in the database
+        session_data = {
+            'user_id': user_id,
+            'username': session['username'],
+            'login_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        cursor.execute("""
+            INSERT INTO user_sessions (session_id, user_id, ip_address, user_agent, data, status)
+            VALUES (%s, %s, %s, %s, %s, 'active')
+        """, (session_id, user_id, request.remote_addr, request.user_agent.string, json.dumps(session_data)))
+        mysql.connection.commit()
+
+        # Store session ID in Flask session
+        session['session_id'] = session_id
+        session['user_id'] = user_id
+
+        if email:
+            send_login_notification(email, True, request.remote_addr, "Google Login")
+        else:
+            print("No email found in Google account data")
+
+        flash('Google Login successful!', 'success')
+        return redirect(url_for('home'))
     except Exception as e:
         print(f"Google login failed: {str(e)}")
         flash(f'Google login failed: {str(e)}', 'warning')
@@ -222,9 +304,9 @@ def googleCallback():
 
 
 @app.route("/")
+@app.route("/home")
 def home():
-    return render_template("home.html", session=session.get("user"),
-                           pretty=json.dumps(session.get("user"), indent=4))
+    return render_template("home.html", user=session.get('username'))
 
 @app.route("/google-login")
 def googleLogin():
@@ -234,16 +316,22 @@ def googleLogin():
         # Need to inform user they're logged in.
     return oauth.myApp.authorize_redirect(redirect_uri=url_for("googleCallback", _external=True))
 
+
 @app.route("/logout")
 def logout():
-    session['2fa'] = None
-    session['username'] = None
-    session.pop("user", None)
-    return redirect(url_for("home"))
+    if 'session_id' in session:
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("""
+            UPDATE user_sessions 
+            SET status = 'logged_out'
+            WHERE session_id = %s
+        """, (session['session_id'],))
+        mysql.connection.commit()
+        cursor.close()
 
-# if __name__ == "__main__":
-#     app.run(host="0.0.0.0", port=appConf.get(
-#         "FLASK_PORT"), debug=True)
+    session.clear()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for("home"))
 
 @app.route('/setup-totp', methods=['GET', 'POST'])
 def setup_totp():
@@ -367,4 +455,4 @@ for rule in app.url_map.iter_rules():
     print(rule)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
