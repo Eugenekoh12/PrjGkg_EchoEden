@@ -9,6 +9,21 @@ from authlib.integrations.flask_client import OAuth
 import secrets
 from functools import wraps
 import uuid
+from flask_wtf import FlaskForm, RecaptchaField
+from wtforms import StringField, PasswordField, SubmitField
+from wtforms.validators import DataRequired, Email, EqualTo
+
+#captcha Glenys
+
+
+class RegistrationForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired()])
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
+    recaptcha = RecaptchaField()
+    submit = SubmitField('Sign Up')
+
 
 app = Flask(__name__)
 bcrypt = Bcrypt(app)
@@ -21,6 +36,8 @@ app.config['MYSQL_USER'] = 'Ech03den'
 app.config['MYSQL_PASSWORD'] = 'Pan4will.FLEXmy7adviser'
 app.config['MYSQL_DB'] = 'echoeden'
 app.config['MYSQL_PORT'] = 3306
+app.config['RECAPTCHA_PUBLIC_KEY'] = '6Lc4FiIqAAAAAI-SrMHabpsRbXQ4LnpcBQgWMAnF'
+app.config['RECAPTCHA_PRIVATE_KEY'] = '6Lc4FiIqAAAAAJHWbk-y1XV0bu59SCf60wcz64RD'
 mysql = MySQL(app)
 
 # Flask-Mail configuration
@@ -106,6 +123,7 @@ def register():
         return redirect(url_for('home'))
 
     return render_template('register.html', title='Register', form=form)
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():

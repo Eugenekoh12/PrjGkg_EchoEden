@@ -5,10 +5,11 @@
     <title>Register</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <!-- Glenys Input Validation -->
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 </head>
 <body>
     <h1>Register</h1>
-    <form method="POST">
+    <form method="POST" action="{{ url_for('register') }}">
         {{ form.hidden_tag() }}
         <div>
             {{ form.username.label }}<br>
@@ -38,9 +39,11 @@
                 <span style="color: red;">{{ error }}</span><br>
             {% endfor %}
         </div>
+        <div class="g-recaptcha" data-sitekey="6Lc4FiIqAAAAAI-SrMHabpsRbXQ4LnpcBQgWMAnF"></div>
         <div>
             {{ form.submit(class="btn btn-primary") }}
         </div>
     </form>
 </body>
 </html>
+
