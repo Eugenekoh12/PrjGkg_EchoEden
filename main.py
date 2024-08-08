@@ -188,11 +188,14 @@ Echo Eden
 def session_history():
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute("""
-        SELECT * FROM user_sessions 
+        SELECT session_id, ip_address, user_agent, last_activity, status,
+               CASE WHEN status = 'logged_out' THEN last_activity ELSE NULL END AS logout_time
+        FROM user_sessions 
         WHERE user_id = %s 
         ORDER BY last_activity DESC
     """, (session['user_id'],))
     sessions = cursor.fetchall()
+    cursor.close()
     return render_template('session_history.html', sessions=sessions)
 
 

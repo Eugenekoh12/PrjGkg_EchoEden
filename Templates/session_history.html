@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session History</title>
+</head>
+<body>
+    <h1>Session History</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Session ID</th>
+                <th>IP Address</th>
+                <th>User Agent</th>
+                <th>Last Activity</th>
+                <th>Status</th>
+                <th>Logout Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for session in sessions %}
+            <tr>
+                <td>{{ session.session_id }}</td>
+                <td>{{ session.ip_address }}</td>
+                <td>{{ session.user_agent }}</td>
+                <td>{{ session.last_activity }}</td>
+                <td>{{ session.status }}</td>
+                <td>{{ session.logout_time if session.logout_time else 'N/A' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
