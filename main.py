@@ -296,8 +296,6 @@ def googleCallback():
         else:
             print("No email found in Google account data")
 
-        flash('Google Login successful!', 'success')
-        return redirect(url_for('home'))
         flash('Google Login successful! Please create a username:', 'success')
         return redirect(url_for('oauth_username'))
     except Exception as e:
@@ -319,6 +317,7 @@ def googleLogin():
     # if you are cayden comment the if statement cuz SOMEHOW IT DOESN'T WORK FOR HIM
         # Need to inform user they're logged in.
     return oauth.myApp.authorize_redirect(redirect_uri=url_for("googleCallback", _external=True))
+
 
 @app.route("/logout")
 def logout():
