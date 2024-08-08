@@ -196,7 +196,26 @@ def session_history():
     """, (session['user_id'],))
     sessions = cursor.fetchall()
     cursor.close()
+
+    # Process the sessions to extract browser information
+    for session_data in sessions:
+        user_agent = session_data['user_agent'].lower()
+        if 'chrome' in user_agent:
+            session_data['browser'] = 'Chrome'
+        elif 'firefox' in user_agent:
+            session_data['browser'] = 'Firefox'
+        elif 'safari' in user_agent:
+            session_data['browser'] = 'Safari'
+        elif 'edge' in user_agent:
+            session_data['browser'] = 'Edge'
+        elif 'opera' in user_agent:
+            session_data['browser'] = 'Opera'
+        else:
+            session_data['browser'] = 'Other'
+
     return render_template('session_history.html', sessions=sessions)
+
+
 
 
 # https://www.youtube.com/watch?v=fZLWO3_V06Q - reference video
