@@ -6,6 +6,7 @@ from flask_mail import Mail, Message
 from datetime import datetime, timedelta
 import MySQLdb.cursors, re, json, requests, pyotp, time, qrcode, io, base64
 from authlib.integrations.flask_client import OAuth
+import secrets
 from functools import wraps
 import uuid
 
@@ -14,6 +15,7 @@ bcrypt = Bcrypt(app)
 mail = Mail(app)
 
 app.secret_key = 'the722semanticTOBOGGANS5smoothly.leutinizesTHEpointy3barrelOFgunpowder'
+# app.permanent_session_lifetime = timedelta(minutes=60)
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'Ech03den'
 app.config['MYSQL_PASSWORD'] = 'Pan4will.FLEXmy7adviser'
@@ -104,7 +106,6 @@ def register():
         return redirect(url_for('home'))
 
     return render_template('register.html', title='Register', form=form)
-
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -297,6 +298,8 @@ def googleCallback():
 
         flash('Google Login successful!', 'success')
         return redirect(url_for('home'))
+        flash('Google Login successful! Please create a username:', 'success')
+        return redirect(url_for('oauth_username'))
     except Exception as e:
         print(f"Google login failed: {str(e)}")
         flash(f'Google login failed: {str(e)}', 'warning')
@@ -311,14 +314,20 @@ def home():
 @app.route("/google-login")
 def googleLogin():
     if "user" in session:
-        abort(404)
+        flash('User already logged in!', 'warning')
+        return redirect(url_for("home"))
     # if you are cayden comment the if statement cuz SOMEHOW IT DOESN'T WORK FOR HIM
         # Need to inform user they're logged in.
     return oauth.myApp.authorize_redirect(redirect_uri=url_for("googleCallback", _external=True))
 
-
 @app.route("/logout")
 def logout():
+    session['2fa'] = None
+    session['username'] = None
+    session['user'] = None
+    session.pop("2fa", None)
+    session.pop("username", None)
+    session.pop("user", None)
     if 'session_id' in session:
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute("""
@@ -406,6 +415,8 @@ def verify_totp():
 @app.route('/oauth-username', methods=['GET', 'POST'])
 def oauth_username():
     form = RegistrationForm()
+    password_base = secrets.token_urlsafe(64)
+    password = bcrypt.hashpw(password_base.encode(), bcrypt.gensalt(rounds=12))
     if form.validate_on_submit():
         username = form.username.data
         email = session['email']
@@ -417,7 +428,7 @@ def oauth_username():
         account = cursor.fetchone()
 
         if account:
-            flash('Username already exists', 'warning')
+            flash('Username already exists! Please try again.', 'warning')
             return redirect(url_for('oauth_username'))
 
         # Insert a new record into the settings table and get the settings_id
@@ -436,8 +447,8 @@ def oauth_username():
 
         # Insert a new record into the account_settings table for the new user
         cursor.execute(
-            "INSERT INTO account_settings (user_id, oauth_token) VALUES (%s, %s)",
-            (user_id, hashed_token)  # Store the hashed token in the account_settings table
+            "INSERT INTO account_settings (user_id, oauth_token, generated_password) VALUES (%s, %s, %s)",
+            (user_id, hashed_token, 1)  # Store the hashed token and set generated_password to 1
         )
         cursor.execute(
             "INSERT INTO associates (user_id) VALUES (%s)",
@@ -450,6 +461,7 @@ def oauth_username():
         return redirect(url_for('home'))
 
     return render_template('oauth_username.html', title='Choose Username', form=form)
+
 
 for rule in app.url_map.iter_rules():
     print(rule)

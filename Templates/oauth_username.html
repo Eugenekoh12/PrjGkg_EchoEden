@@ -21,11 +21,9 @@
 {% endblock %}
 
 {% block content %}
-    <form method="POST">
-        {{ form.hidden_tag() }}
-        {{ form.csrf_token }}
+    <form action="/oauth-username" method="POST">
         <label for="username">Choose a username:</label>
-        {{ form.username.label }} {{ form.username(size=20) }}
+        {{ form.username.label }} {{ form.username(size=24) }}
         <input type="submit" value="Choose this Username">
     </form>
 {% endblock %}

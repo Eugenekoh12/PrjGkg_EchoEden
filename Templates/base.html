@@ -12,8 +12,15 @@
   </head>
   <body>
     <div id="notifications">
-        {% block notif_notify %}{% endblock %}{% if self.notif_notify() is defined %}</br>{% endif %}
-        {% block notif_warning %}{% endblock %}{% if self.notif_warning() is defined %}</br>{% endif %}
+        {% block notif_notify %}
+            {% set notif_notify_defined = true %}
+        {% endblock %}
+        {% if notif_notify_defined %}<br>{% endif %}
+
+        {% block notif_warning %}
+            {% set notif_warning_defined = true %}
+        {% endblock %}
+        {% if notif_warning_defined %}<br>{% endif %}
     </div>
     <div id="content">{% block content %}{% endblock %}</div>
     <div id="footer">
