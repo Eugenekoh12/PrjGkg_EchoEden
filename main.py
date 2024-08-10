@@ -15,7 +15,6 @@ from wtforms.validators import DataRequired, Email, EqualTo
 
 #captcha Glenys
 
-
 class RegistrationForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
     email = StringField('Email', validators=[DataRequired(), Email()])
@@ -130,6 +129,20 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        recaptcha_response = request.form.get('g-recaptcha-response')
+
+        # Verify reCAPTCHA
+        secret_key = '6Lc4FiIqAAAAAJHWbk-y1XV0bu59SCf60wcz64RD'
+        data = {
+            'secret': secret_key,
+            'response': recaptcha_response
+        }
+        r = requests.post('https://www.google.com/recaptcha/api/siteverify', data=data)
+        result = r.json()
+
+        if not result['success']:
+            flash('Invalid reCAPTCHA. Please try again.', 'warning')
+            return redirect(url_for('login'))
 
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
@@ -168,7 +181,7 @@ def login():
             session['username'] = account['username']
 
             flash('Login successful!', 'success')
-            return redirect(url_for('home'))  # This line ensures redirection to home page
+            return redirect(url_for('home'))
         else:
             flash('Invalid username or password', 'warning')
 
@@ -514,3 +527,4 @@ for rule in app.url_map.iter_rules():
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
+
