@@ -364,19 +364,12 @@ def home():
 
 @app.route("/google-login")
 def googleLogin():
-    app.logger.info("Google login route accessed")
-    if "user_id" in session:
-        app.logger.info("User already logged in")
+    if "user" in session:
         flash('User already logged in!', 'warning')
         return redirect(url_for("home"))
-    try:
-        redirect_uri = url_for("googleCallback", _external=True)
-        app.logger.info(f"Initiating Google OAuth redirect to: {redirect_uri}")
-        return oauth.myApp.authorize_redirect(redirect_uri=redirect_uri)
-    except Exception as e:
-        app.logger.error(f"Error initiating Google OAuth: {str(e)}")
-        flash('Unable to initiate Google login. Please try again.', 'error')
-        return redirect(url_for("login"))
+    # if you are cayden comment the if statement cuz SOMEHOW IT DOESN'T WORK FOR HIM
+        # Need to inform user they're logged in.
+    return oauth.myApp.authorize_redirect(redirect_uri=url_for("googleCallback", _external=True))
 
 
 @app.route("/logout")
