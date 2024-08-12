@@ -1,22 +1,16 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, abort
+from flask import Flask, render_template, request, redirect, url_for, session, flash, abort, send_file, jsonify, render_template
 from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
-from flask import jsonify, render_template
-from forms import RegistrationForm
-from flask_mail import Mail, Message
-from datetime import datetime, timedelta
-import MySQLdb.cursors, re, json, requests, pyotp, time, qrcode, io, base64
-from authlib.integrations.flask_client import OAuth
-import secrets
-from functools import wraps
-import uuid
 from flask_wtf import FlaskForm, RecaptchaField
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo
-import re
-import logging
-import socket
-import struct
+from forms import RegistrationForm
+from flask_mail import Mail, Message
+from datetime import datetime, timedelta
+from authlib.integrations.flask_client import OAuth
+from functools import wraps
+from PIL import Image
+import MySQLdb.cursors, re, json, requests, pyotp, time, qrcode, io, base64, logging, socket, struct, secrets, uuid, os
 
 #captcha Glenys
 
@@ -501,8 +495,8 @@ def googleCallback():
 
 
 @app.route("/")
+@app.route("/dashboard")
 @app.route("/home")
-@app.route('/dashboard')
 def home():
     global current_2fa_status
     return render_template("home.html", user=session.get('username'), nav_current='home', twofactor=current_2fa_status)
@@ -543,7 +537,7 @@ def logout():
 
 @app.route('/setup-totp', methods=['GET', 'POST'])
 def setup_totp():
-    if 'user' not in session:
+    if "username" not in session:
         return redirect(url_for('login'))
 
     username = session.get('username')
@@ -619,11 +613,10 @@ def verify_totp():
 def oauth_username():
     form = RegistrationForm()
     password_base = secrets.token_urlsafe(64)
-    password = bcrypt.hashpw(password_base.encode(), bcrypt.gensalt(rounds=12))
     if form.validate_on_submit():
         username = form.username.data
         email = session['email']
-        password = bcrypt.generate_password_hash('random_password').decode('utf-8')  # Generate a random password
+        password = bcrypt.generate_password_hash(password_base).decode('utf-8')  # Generate a random password
         hashed_token = session['oauth_token']  # Retrieve the hashed token from the session
 
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -665,6 +658,38 @@ def oauth_username():
 
     return render_template('oauth_username.html', user=session.get('username'), nav_current='oauth_username', title='Choose Username', form=form)
 
+@app.route('/rsz-img')
+def resize_image():
+    image_path = request.args.get('url')
+    if not image_path or not os.path.exists(image_path):
+        abort(404, description="Image not found")
+
+    width = request.args.get('w')
+    height = request.args.get('h')
+
+    # Open the image using Pillow
+    img = Image.open(image_path)
+    original_width, original_height = img.size
+
+    if width and not height:
+        width = int(width)
+        height = int((width / original_width) * original_height)
+    elif height and not width:
+        height = int(height)
+        width = int((height / original_height) * original_width)
+    else:
+        width = int(width) if width else original_width
+        height = int(height) if height else original_height
+
+    # Resize the image
+    img = img.resize((width, height), Image.Resampling.LANCZOS)
+
+    # Save the resized image to a BytesIO object
+    img_io = io.BytesIO()
+    img.save(img_io, 'PNG')
+    img_io.seek(0)
+
+    return send_file(img_io, mimetype='image/png')
 
 for rule in app.url_map.iter_rules():
     print(rule)

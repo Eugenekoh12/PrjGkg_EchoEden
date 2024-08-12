@@ -1,7 +1,7 @@
 <!-- Navbar -->
 <nav>
     <ul>
-      <li><a class="{% if nav_current == 'home' %}active{% endif %}" href="{{ url_for('home') }}">Echo Eden</a></li>
+      <li><a class="{% if nav_current == 'home' %}active{% endif %}" href="{{ url_for('home') }}"><img style="padding: 0px !important; margin: -6px !important;" src="./rsz-img?url=static/images/logo_horiz.png&h=30" alt="Echo Eden Logo"></a></li>
       {% if user|default(None) is defined and user|default(None) is not none %}
             <li><a class="{% if nav_current == 'sessions' %}active{% endif %}" href="{{ url_for('session_history') }}">Sessions</a></li>
             <li style="float:right"><a href="{{ url_for('logout') }}">Logout</a></li>

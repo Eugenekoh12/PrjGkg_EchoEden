@@ -202,6 +202,7 @@ nav ul {
   position: fixed;
   top: 0;
   width: 100%;
+  height: 46px !important;
 }
 
 nav li {
@@ -230,7 +231,7 @@ nav .active {
 }
 
 .content {
-    padding-top: 30px;
+    padding-top: 40px;
 }
 
 span.clear { clear: left; display: block; }
