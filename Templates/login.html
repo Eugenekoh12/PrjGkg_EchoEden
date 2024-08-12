@@ -1,33 +1,26 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    <title>Login</title>
-</head>
-<body>
-
-    <!-- Notification Blocks -->
-    <div>
-        {% with messages = get_flashed_messages() %}
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block notif_notify %}
+    {% with messages = get_flashed_messages() %}
             {% if messages %}
                 {% for message in messages %}
-                    <p>{{ message }}</p><br>
+                    <p>{{ message }}</p>
                 {% endfor %}
             {% endif %}
         {% endwith %}
+{% endblock %}
 
-        {% with warnings = get_flashed_messages(category_filter=["warning"]) %}
+{% block notif_warning %}
+    {% with warnings = get_flashed_messages(category_filter=["warning"]) %}
             {% if warnings %}
                 {% for message in warnings %}
-                    <p>{{ message }}</p><br>
+                    <p>{{ message }}</p>
                 {% endfor %}
             {% endif %}
         {% endwith %}
-    </div>
+{% endblock %}
 
-    <!-- Content Block -->
+{% block content %}
     <div class="float-container">
         <div class="float-child">
             <div class="login_box">
@@ -70,7 +63,4 @@
 
     <!-- Load reCAPTCHA API -->
     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
-
-</body>
-</html>
-
+{% endblock %}

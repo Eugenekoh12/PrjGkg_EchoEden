@@ -89,6 +89,11 @@ def register():
         email = form.email.data
         password = form.password.data
 
+        # Custom server-side validation
+        if len(password) < 8 or not re.search(r'[A-Z]', password) or not re.search(r'\d', password):
+            flash('Password must be at least 8 characters long, contain one uppercase letter and one number', 'warning')
+            return redirect(url_for('register'))
+
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
         account = cursor.fetchone()
@@ -494,6 +499,7 @@ def googleCallback():
 
 @app.route("/")
 @app.route("/home")
+@app.route('/dashboard')
 def home():
     global current_2fa_status
     return render_template("home.html", user=session.get('username'), twofactor=current_2fa_status)

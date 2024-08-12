@@ -1,15 +1,30 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Verify TOTP</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Verify TOTP{% endblock %}
+{% block notif_notify %}
+    {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <p>{{ message }}</p></br>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+{% endblock %}
+
+{% block notif_warning %}
+    {% with warnings = get_flashed_messages(category_filter=["warning"]) %}
+            {% if warnings %}
+                {% for message in warnings %}
+                    <p>{{ message }}</p></br>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+{% endblock %}
+
+{% block content %}
     <h1>Verify TOTP</h1>
     <form method="POST">
         <label for="token">Enter the current TOTP from your 2FA app:</label>
         <input type="text" id="token" name="token">
         <input type="submit" value="Verify">
     </form>
-</body>
-</html>
+{% endblock %}
