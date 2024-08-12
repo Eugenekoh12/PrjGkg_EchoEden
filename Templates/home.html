@@ -22,20 +22,19 @@
 
 {% block content %}
     <h2>
-        {% if session['username'] is defined %}
-            Hi, {{ session['username'] }}!
+        {% if user|default(None) is defined and user|default(None) is not none %}
+            Hi, {{ user }}!
         {% endif %}
         Welcome to EchoEden!
     </h2>
-        {% if username is defined %}
-            {% if twofactor is defined %}
+        {% if user|default(None) is defined and user|default(None) is not none %}
+            {% if twofactor is true %}
                 <p><a href="{{url_for('verify_totp')}}">Verify 2FA (TOTP)</a></p>
             {% else %}
                 <p><a href="{{url_for('setup_totp')}}">Setup 2FA (TOTP)</a></p>
             {% endif %}
             <p><a href="{{url_for('logout')}}">Logout</a></p>
-        {% endif %}
-        {% if username is not defined %}
+        {% else %}
             <p><a href="{{url_for('login')}}">Login</a> or <a href="{{url_for('register')}}">Register</a> with us.</p>
         {% endif %}
 {% endblock %}
