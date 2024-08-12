@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, abort
 from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
+from flask import jsonify, render_template
 from forms import RegistrationForm
 from flask_mail import Mail, Message
 from datetime import datetime, timedelta
@@ -12,6 +13,8 @@ import uuid
 from flask_wtf import FlaskForm, RecaptchaField
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo
+import re
+import logging
 
 #captcha Glenys
 
@@ -213,6 +216,105 @@ Echo Eden
     except Exception as e:
         print(f"Failed to send email notification to {email}: {str(e)}")
         app.logger.error(f"Failed to send email notification to {email}: {str(e)}")
+
+
+from flask import request, jsonify
+import re
+
+
+@app.route('/verify-id', methods=['POST'])
+@login_required
+def verify_id():
+    id_number = request.form.get('id_number')
+
+    if not id_number:
+        return jsonify({'error': 'ID number is required'}), 400
+
+    # Validate NRIC format
+    if not re.match(r'^[STFG]\d{7}[A-Z]$', id_number):
+        return jsonify({'error': 'Invalid NRIC format'}), 400
+
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Check if the NRIC is already used
+    cursor.execute("SELECT * FROM id_verification WHERE id_number = %s", (id_number,))
+    existing_verification = cursor.fetchone()
+
+    if existing_verification:
+        if existing_verification['user_id'] == session['user_id']:
+            return jsonify({'message': 'This NRIC is already verified for your account'}), 200
+        else:
+            return jsonify({'error': 'This NRIC is already registered to another account'}), 400
+
+    # Insert the new ID verification record
+    try:
+        cursor.execute(
+            "INSERT INTO id_verification (user_id, id_number, status) VALUES (%s, %s, 'verified')",
+            (session['user_id'], id_number)
+        )
+        mysql.connection.commit()
+        return jsonify({'message': 'NRIC verified successfully'}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+    finally:
+        cursor.close()
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+
+@app.route('/test-verify-id/<test_id>', methods=['GET'])
+def test_verify_id(test_id):
+    # Simulate a POST request to /verify-id
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['user_id'] = 1  # Assume user 1 for testing
+
+        response = client.post('/verify-id', data={'id_number': test_id})
+
+        logger.info(f"Test verification attempt: User ID 1 tried to verify NRIC {test_id}")
+        logger.info(f"Response: {response.get_data(as_text=True)}")
+
+        return response.get_data(as_text=True), response.status_code
+
+
+@app.route('/test-duplicate-verify/<test_id>', methods=['GET'])
+def test_duplicate_verify(test_id):
+    # First verification
+    first_response = test_verify_id(test_id)
+
+    # Second verification (should fail)
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['user_id'] = 2  # Assume a different user
+
+        response = client.post('/verify-id', data={'id_number': test_id})
+
+        logger.info(f"Test duplicate verification attempt: User ID 2 tried to verify NRIC {test_id}")
+        logger.info(f"Response: {response.get_data(as_text=True)}")
+
+        return (f"First attempt: {first_response}\n"
+                f"Second attempt: {response.get_data(as_text=True)}"), response.status_code
+
+
+
+def get_verification_status(user_id):
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT status FROM id_verification WHERE user_id = %s", (user_id,))
+    result = cursor.fetchone()
+    cursor.close()
+    return result['status'] if result else None
+
+
+@app.route('/id-verification')
+@login_required
+def id_verification_page():
+    verification_status = get_verification_status(session['user_id'])
+    return render_template('id_verification.html', verification_status=verification_status)
+
 #session
 @app.route('/session-history')
 @login_required
