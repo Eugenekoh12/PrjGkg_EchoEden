@@ -8,6 +8,7 @@
         {% endif %}EchoEden
     </title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+      {% block head_scripts %}{% endblock %}
     {% endblock %}
   </head>
   <body>
@@ -16,7 +17,6 @@
             {% set notif_notify_defined = true %}
         {% endblock %}
         {% if notif_notify_defined %}<br>{% endif %}
-
         {% block notif_warning %}
             {% set notif_warning_defined = true %}
         {% endblock %}
@@ -26,6 +26,7 @@
     <div id="footer">
       {% block footer %}
       &copy; Copyright 2024 - {{now.year}} by <a href="http://echoeden.draek.dev/">EchoEden</a>.
+        {% block footer_scripts %}{% endblock %}
       {% endblock %}
     </div>
   </body>

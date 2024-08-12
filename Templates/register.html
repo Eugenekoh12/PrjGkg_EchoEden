@@ -1,22 +1,27 @@
-{% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-        {% for category, message in messages %}
-            <div class="alert alert-{{ category }}">{{ message }}</div>
-        {% endfor %}
-    {% endif %}
-{% endwith %}
+{% extends "base.html" %}
+{% block title %}Register{% endblock %}
+{% block notif_notify %}
+    {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <p>{{ message }}</p></br>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+{% endblock %}
 
+{% block notif_warning %}
+    {% with warnings = get_flashed_messages(category_filter=["warning"]) %}
+            {% if warnings %}
+                {% for message in warnings %}
+                    <p>{{ message }}</p></br>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+{% endblock %}
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Register</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    <!-- Glenys Input Validation updated -->
-    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
-</head>
-<body>
+{% block head_scripts %}<script src="https://www.google.com/recaptcha/api.js" async defer></script>{% endblock %}
+{% block content %}
     <h1>Register</h1>
 
     <form method="POST" action="{{ url_for('register') }}">
@@ -63,7 +68,8 @@
             {{ form.submit(class="btn btn-primary") }}
         </div>
     </form>
-
+{% endblock %}
+{% block footer_scripts %}
     <script>
         document.getElementById('password').addEventListener('input', function() {
             const password = this.value;
@@ -110,8 +116,4 @@
             }
         });
     </script>
-
-</body>
-</html>
-
-
+{% endblock %}

@@ -365,6 +365,7 @@ def googleCallback():
 
 @app.route("/")
 @app.route("/home")
+@app.route('/dashboard')
 def home():
     global current_2fa_status
     return render_template("home.html", user=session.get('username'), twofactor=current_2fa_status)
