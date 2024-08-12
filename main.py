@@ -12,12 +12,14 @@ import uuid
 from flask_wtf import FlaskForm, RecaptchaField
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo
+from twilio.rest import Client #added pip install twilio
 
 #captcha Glenys
 
 class RegistrationForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
     email = StringField('Email', validators=[DataRequired(), Email()])
+    phone_number = StringField('Phone Number', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
     confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
     recaptcha = RecaptchaField()
@@ -39,6 +41,21 @@ app.config['RECAPTCHA_PUBLIC_KEY'] = '6Lc4FiIqAAAAAI-SrMHabpsRbXQ4LnpcBQgWMAnF'
 app.config['RECAPTCHA_PRIVATE_KEY'] = '6Lc4FiIqAAAAAJHWbk-y1XV0bu59SCf60wcz64RD'
 mysql = MySQL(app)
 
+# Twilio configuration
+TWILIO_ACCOUNT_SID = 'AC18266136f986e71c9927f862abd883f3'
+TWILIO_AUTH_TOKEN = '93b98a3fe21747b7f9557ca1fdfdca09'
+TWILIO_PHONE_NUMBER = '+6591511601'
+
+client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+#verification = client.verify \
+#    .v2 \
+ #   .services('VA46c464ce737ba057199f55310aa9a351') \
+  #  .verifications \
+   # .create(to='+6591511601', channel='sms')
+
+#print(verification.sid)
+
 # Flask-Mail configuration
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
@@ -47,6 +64,55 @@ app.config['MAIL_USE_SSL'] = False
 app.config['MAIL_USERNAME'] = 'echoedenn@gmail.com'
 app.config['MAIL_PASSWORD'] = 'edls docn byvz qcgd'
 mail = Mail(app)
+
+#route to generate OTP
+@app.route('/send-otp', methods=['POST'])
+def send_otp():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    otp = str(uuid.uuid4().hex[:6])  # Generate a 6-digit OTP
+    session['otp'] = otp  # Store OTP in session for verification later
+
+    user_id = session['user_id']
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT email, phone_number FROM accounts WHERE id = %s", (user_id,))
+    account = cursor.fetchone()
+    cursor.close()
+
+    if account:
+        email = account['email']
+        phone_number = account['phone_number']
+        message = f"Your OTP for Echo Eden is: {otp}"
+        try:
+            # Send SMS via Twilio
+            client.messages.create(
+                body=message,
+                from_=TWILIO_PHONE_NUMBER,
+                to=phone_number  # Make sure this is a phone number, not an email
+            )
+            flash('OTP sent successfully!', 'success')
+        except Exception as e:
+            if '429' in str(e):
+                flash('Rate limit reached. Please try again later.', 'danger')
+            else:
+                flash(f'Failed to send OTP: {str(e)}', 'danger')
+
+    return redirect(url_for('verify_otp'))
+
+#verify otp
+@app.route('/verify-otp', methods=['GET', 'POST'])
+def verify_otp():
+    if request.method == 'POST':
+        entered_otp = request.form['otp']
+        if entered_otp == session.get('otp'):
+            session['2fa'] = True
+            flash('2FA verification successful!', 'success')
+            return redirect(url_for('home'))
+        else:
+            flash('Invalid OTP, please try again.', 'warning')
+
+    return render_template('verify_otp.html')
 
 @app.context_processor
 def inject_now():
@@ -81,6 +147,7 @@ def register():
     if form.validate_on_submit():
         username = form.username.data
         email = form.email.data
+        phone_number = form.phone_number.data
         password = form.password.data
 
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -153,6 +220,7 @@ def login():
             cursor.execute("SELECT * FROM user_sessions WHERE user_id = %s AND last_activity > %s",
                            (account['id'], datetime.now() - timedelta(minutes=30)))
             existing_session = cursor.fetchone()
+
 
             if existing_session:
                 # Invalidate previous session

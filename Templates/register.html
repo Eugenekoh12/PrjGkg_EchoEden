@@ -6,9 +6,33 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <!-- Glenys Input Validation -->
     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <style>
+        #passwordRequirements {
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        #passwordRequirements ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+
+        #passwordRequirements li {
+            margin-bottom: 5px;
+        }
+
+        #passwordRequirements li.invalid {
+            color: red;
+        }
+
+        #passwordRequirements li.valid {
+            color: green;
+        }
+    </style>
 </head>
 <body>
     <h1>Register</h1>
+
     <form method="POST" action="{{ url_for('register') }}">
         {{ form.hidden_tag() }}
         <div>
@@ -27,10 +51,19 @@
         </div>
         <div>
             {{ form.password.label }}<br>
-            {{ form.password(class="form-control") }}
+            <input type="password" id="password" name="password" class="form-control" required>
             {% for error in form.password.errors %}
                 <span style="color: red;">{{ error }}</span><br>
             {% endfor %}
+        </div>
+        <div id="passwordRequirements">
+            <p>Your password must contain:</p>
+            <ul>
+                <li id="length" class="invalid">At least 8 characters</li>
+                <li id="lowercase" class="invalid">Lower case letters (a-z)</li>
+                <li id="uppercase" class="invalid">Upper case letters (A-Z)</li>
+                <li id="numbers" class="invalid">Numbers (0-9)</li>
+            </ul>
         </div>
         <div>
             {{ form.confirm_password.label }}<br>
@@ -44,6 +77,55 @@
             {{ form.submit(class="btn btn-primary") }}
         </div>
     </form>
+
+    <script>
+        document.getElementById('password').addEventListener('input', function() {
+            const password = this.value;
+
+            const lengthRequirement = document.getElementById('length');
+            const lowercaseRequirement = document.getElementById('lowercase');
+            const uppercaseRequirement = document.getElementById('uppercase');
+            const numbersRequirement = document.getElementById('numbers');
+
+            // Check length
+            if (password.length >= 8) {
+                lengthRequirement.classList.remove('invalid');
+                lengthRequirement.classList.add('valid');
+            } else {
+                lengthRequirement.classList.remove('valid');
+                lengthRequirement.classList.add('invalid');
+            }
+
+            // Check lowercase letters
+            if (/[a-z]/.test(password)) {
+                lowercaseRequirement.classList.remove('invalid');
+                lowercaseRequirement.classList.add('valid');
+            } else {
+                lowercaseRequirement.classList.remove('valid');
+                lowercaseRequirement.classList.add('invalid');
+            }
+
+            // Check uppercase letters
+            if (/[A-Z]/.test(password)) {
+                uppercaseRequirement.classList.remove('invalid');
+                uppercaseRequirement.classList.add('valid');
+            } else {
+                uppercaseRequirement.classList.remove('valid');
+                uppercaseRequirement.classList.add('invalid');
+            }
+
+            // Check numbers
+            if (/[0-9]/.test(password)) {
+                numbersRequirement.classList.remove('invalid');
+                numbersRequirement.classList.add('valid');
+            } else {
+                numbersRequirement.classList.remove('valid');
+                numbersRequirement.classList.add('invalid');
+            }
+        });
+    </script>
+
 </body>
 </html>
+
 

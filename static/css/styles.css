@@ -91,3 +91,24 @@ button:hover {
 }
 
 span.clear { clear: left; display: block; }
+#passwordRequirements {
+    margin-top: 10px;
+    font-size: 0.9em;
+}
+
+#passwordRequirements ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+#passwordRequirements li {
+    margin-bottom: 5px;
+}
+
+#passwordRequirements li.invalid {
+    color: red;
+}
+
+#passwordRequirements li.valid {
+    color: green;
+}
