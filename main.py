@@ -155,47 +155,38 @@ def login():
         cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
         account = cursor.fetchone()
 
-        if account and bcrypt.check_password_hash(account['password_hash'], password):
-            # Check for existing active sessions
-            cursor.execute("SELECT * FROM user_sessions WHERE user_id = %s AND last_activity > %s",
-                           (account['id'], datetime.now() - timedelta(minutes=30)))
-            existing_session = cursor.fetchone()
+        if account:
+            user = User.get_user_by_username(username)
 
-            if existing_session:
-                # Invalidate previous session
-                cursor.execute("UPDATE user_sessions SET status = 'logged_out' WHERE user_id = %s", (account['id'],))
-                mysql.connection.commit()
-                flash('Previous session has been logged out.', 'info')
+            if user and not user.is_locked:
+                if bcrypt.check_password_hash(user.password, password):
+                    user.login_attempts = 0
+                    user.update_login_attempts()
 
-            # Generate a unique session ID
-            session_id = str(uuid.uuid4())
+                    # Check if 2FA is enabled
+                    cursor.execute("SELECT * FROM account_settings WHERE user_id = %s", (account['id'],))
+                    settings = cursor.fetchone()
 
-            # Get client IP
-            client_ip = get_client_ip()
-
-            # Store session details in the database
-            session_data = {
-                'user_id': account['id'],
-                'username': account['username'],
-                'login_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'ip_address': client_ip
-            }
-            cursor.execute("""
-                INSERT INTO user_sessions (session_id, user_id, ip_address, user_agent, data, status)
-                VALUES (%s, %s, %s, %s, %s, 'active')
-            """, (session_id, account['id'], client_ip, request.user_agent.string, json.dumps(session_data)))
-            mysql.connection.commit()
-
-            # Store session ID in Flask session
-            session['session_id'] = session_id
-            session['user_id'] = account['id']
-            session['username'] = account['username']
-
-            # Send login notification email
-            send_login_notification(account['email'], True, client_ip, "Normal Login")
-
-            flash('Login successful!', 'success')
-            return redirect(url_for('home'))
+                    if settings['2fa_token_totp'] or settings['2fa_token_email']:
+                        session['tmp_user'] = {
+                            'username': account['username'],
+                            'user_id': account['id']
+                        }
+                        return redirect(url_for('verify_otp'))
+                    else:
+                        login_user(user)
+                        flash('Login successful!', 'success')
+                        return redirect(url_for('home'))
+                else:
+                    user.login_attempts += 1
+                    if user.login_attempts >= 5:
+                        user.is_locked = True
+                    user.update_login_attempts()
+                    flash('Invalid credentials. Try again.')
+            elif user and user.is_locked:
+                flash('Account is locked. Please contact support.')
+            else:
+                flash('Invalid username or password.', 'warning')
         else:
             flash('Invalid username or password', 'warning')
 
@@ -551,12 +542,14 @@ def setup_totp():
 
     return render_template('setup_totp.html', user=session.get('username'), nav_current='setup2fa', img_b64=img_b64, secret=secret)
 
-@app.route('/verify-totp', methods=['GET', 'POST'])
-def verify_totp():
-    if 'tmp_user' not in session:
+@app.route('/verify-otp', methods=['GET', 'POST'])
+def verify_otp():
+    global current_2fa_totp_status
+    global current_2fa_email_status
+    if "tmp_user" not in session and "username" not in session:
         return redirect(url_for('login'))
 
-    username = session['tmp_user']['username']
+    username = session.get('tmp_user', {}).get('username') or session.get('username')
 
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
@@ -568,19 +561,51 @@ def verify_totp():
 
     if request.method == 'POST':
         token = request.form['token']
-        if pyotp.TOTP(settings['2fa_token_totp']).verify(token):
+        totp_valid = settings['2fa_token_totp'] and pyotp.TOTP(settings['2fa_token_totp']).verify(token)
+        email_valid = settings['2fa_token_email'] and pyotp.TOTP(settings['2fa_token_email_totp'], interval=120).verify(token)
+
+        if totp_valid or email_valid:
             session['2fa'] = True
-            global current_2fa_status
-            current_2fa_status = True
+            if totp_valid:
+                current_2fa_totp_status = True
+            if email_valid:
+                current_2fa_email_status = True
             session['username'] = username
             session['user'] = session['tmp_user']
             del session['tmp_user']
+            session.pop('previous_otp', None)
+            login_user(account)  # Log in the user after successful OTP verification
             flash('Login successful!', 'success')
             return redirect(url_for('home'))
         else:
             flash('Invalid token', 'warning')
 
-    return render_template('verify_totp.html')
+    if not settings['2fa_token_totp']:
+        if settings['2fa_token_email']:
+            secret = settings['2fa_token_email_totp']
+            otp = pyotp.TOTP(secret, interval=120).now()
+            if otp != session.get('previous_otp'):
+                send_otp_email(account['email'], otp)
+                flash('Email OTP sent. Please check your email.', 'info')
+                session['previous_otp'] = otp
+            else:
+                flash('OTP is the same as the previous one. No new email sent.', 'info')
+        else:
+            flash('No OTP method available.', 'danger')
+
+    cursor.close()
+
+    if settings['2fa_token_totp']:
+        otp_type = 'TOTP'
+    elif settings['2fa_token_email']:
+        otp_type = 'Email'
+    else:
+        otp_type = None
+
+    if otp_type is None:
+        return redirect(url_for('home'))
+
+    return render_template('verify_totp.html', user=session.get('username'), otp_type=otp_type)
 
 @app.route('/oauth-username', methods=['GET', 'POST'])
 def oauth_username():
