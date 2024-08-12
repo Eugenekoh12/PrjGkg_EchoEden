@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
   <head>
     {% block head %}
@@ -12,22 +12,25 @@
     {% endblock %}
   </head>
   <body>
-    <div id="notifications">
-        {% block notif_notify %}
-            {% set notif_notify_defined = true %}
-        {% endblock %}
-        {% if notif_notify_defined %}<br>{% endif %}
-        {% block notif_warning %}
-            {% set notif_warning_defined = true %}
-        {% endblock %}
-        {% if notif_warning_defined %}<br>{% endif %}
-    </div>
-    <div id="content">{% block content %}{% endblock %}</div>
-    <div id="footer">
-      {% block footer %}
-      &copy; Copyright 2024 - {{now.year}} by <a href="http://echoeden.draek.dev/">EchoEden</a>.
-        {% block footer_scripts %}{% endblock %}
-      {% endblock %}
+  {% include 'navbar.html' %}
+    <div id="content" class="content">
+        <div id="notifications">
+            {% block notif_notify %}
+                {% set notif_notify_defined = true %}
+            {% endblock %}
+            {% if notif_notify_defined %}<br>{% endif %}
+            {% block notif_warning %}
+                {% set notif_warning_defined = true %}
+            {% endblock %}
+            {% if notif_warning_defined %}<br>{% endif %}
+        </div>
+        {% block content %}{% endblock %}
+        <div id="footer">
+          {% block footer %}
+          &copy; Copyright 2024 - {{now.year}} by <a href="http://echoeden.draek.dev/">EchoEden</a>.
+            {% block footer_scripts %}{% endblock %}
+          {% endblock %}
+        </div>
     </div>
   </body>
 </html>
