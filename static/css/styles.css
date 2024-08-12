@@ -66,23 +66,13 @@ html, body {
     margin: 0;
     padding: 0;
 }
-/* unvisited link */
 a:link {
   color: var(--color-primary-overlay);
 }
-
-/* visited link */
 a:visited {
   color: var(--color-accent-overlay);
 }
-
-/* mouse over link */
-a:hover {
-  color: var(--color-secondary-overlay);
-}
-
-/* selected link */
-a:active {
+a:hover, a:active {
   color: var(--color-secondary-overlay);
 }
 
@@ -209,6 +199,7 @@ button:hover {
 /** Navbar **/
 
 nav ul {
+  font-weight: 700;
   list-style-type: none;
   margin: 0;
   padding: 0;
@@ -245,11 +236,35 @@ nav .active {
   background-color: var(--opp-color-primary);
 }
 
+nav a:link {
+  color: var(--color-primary);
+}
+nav a:visited {
+  color: var(--color-accent);
+}
+nav a:hover, a:active {
+  color: var(--color-secondary);
+}
+
 .content {
     padding-top: 40px;
 }
 
 span.clear { clear: left; display: block; }
+
+/** **/
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+th, td {
+    border: 1px solid var(--opp-color-bg);
+    padding: 8px;
+    text-align: left;
+}
+th {
+    background-color: var(--color-bg-alt);
+}
 
 /** Google Sign In Button **/
 .gsi-material-button {
