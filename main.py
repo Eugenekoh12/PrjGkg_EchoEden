@@ -162,7 +162,7 @@ def login():
 
         if account:
             user_data = User.get_user_by_username(username)
-            user = User(**user_data)
+            user = User(id=user_data['id'], username=user_data['username'], password=user_data['password'], login_attempts=user_data['login_attempts'], is_locked=user_data['is_locked'])
 
             if user and not user.is_locked:
                 if bcrypt.check_password_hash(user.password, password):
@@ -789,7 +789,7 @@ class User(UserMixin):
         user_data = cursor.fetchone()
         cursor.close()
         if user_data:
-            return User(**user_data)
+            return User(id=user_data['id'], username=user_data['username'], password=user_data['password'], login_attempts=user_data['login_attempts'], is_locked=user_data['is_locked'])
         return None
 
     def update_login_attempts(self):
