@@ -95,7 +95,7 @@ def register():
             return redirect(url_for('register'))
 
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
+        cursor.execute("SELECT * FROM accounts WHERE username = %s", [username])
         account = cursor.fetchone()
 
         if account:
@@ -112,7 +112,7 @@ def register():
         # Insert new user into the accounts table and get the user_id
         cursor.execute(
             "INSERT INTO accounts (username, email, password_hash, settings_id) VALUES (%s, %s, %s, %s)",
-            (username, email, hashed_password, settings_id)
+            [username, email, hashed_password, settings_id]
         )
         mysql.connection.commit()
         user_id = cursor.lastrowid
@@ -120,11 +120,11 @@ def register():
         # Insert a new record into the account_settings table for the new user
         cursor.execute(
             "INSERT INTO account_settings (user_id) VALUES (%s)",
-            (user_id,)
+            [user_id]
         )
         cursor.execute(
             "INSERT INTO associates (user_id) VALUES (%s)",
-            (user_id,)
+            [user_id]
         )
         mysql.connection.commit()
         cursor.close()
@@ -157,11 +157,12 @@ def login():
             return redirect(url_for('login'))
 
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
+        cursor.execute("SELECT * FROM accounts WHERE username = %s", [username])
         account = cursor.fetchone()
 
         if account:
-            user = User.get_user_by_username(username)
+            user_data = User.get_user_by_username(username)
+            user = User(**user_data)
 
             if user and not user.is_locked:
                 if bcrypt.check_password_hash(user.password, password):
@@ -242,7 +243,7 @@ def verify_id():
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
     # Check if the NRIC is already used
-    cursor.execute("SELECT * FROM id_verification WHERE id_number = %s", (id_number,))
+    cursor.execute("SELECT * FROM id_verification WHERE id_number = %s", [id_number])
     existing_verification = cursor.fetchone()
 
     if existing_verification:
@@ -308,7 +309,7 @@ def test_duplicate_verify(test_id):
 
 def get_verification_status(user_id):
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute("SELECT status FROM id_verification WHERE user_id = %s", (user_id,))
+    cursor.execute("SELECT status FROM id_verification WHERE user_id = %s", [user_id])
     result = cursor.fetchone()
     cursor.close()
     return result['status'] if result else None
@@ -440,18 +441,18 @@ def googleCallback():
 
             cursor.execute(
                 "INSERT INTO accounts (username, email, password_hash, settings_id) VALUES (%s, %s, %s, %s)",
-                (username, email, hashed_password, settings_id)
+                [username, email, hashed_password, settings_id]
             )
             mysql.connection.commit()
             user_id = cursor.lastrowid
 
             cursor.execute(
                 "INSERT INTO account_settings (user_id) VALUES (%s)",
-                (user_id,)
+                [user_id]
             )
             cursor.execute(
                 "INSERT INTO associates (user_id) VALUES (%s)",
-                (user_id,)
+                [user_id]
             )
             mysql.connection.commit()
 
@@ -512,7 +513,7 @@ def setup_totp():
     username = session.get('username')
 
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
+    cursor.execute("SELECT * FROM accounts WHERE username = %s", [username])
     account = cursor.fetchone()
 
     cursor.execute("SELECT * FROM account_settings WHERE user_id = %s", (account['id'],))
@@ -553,7 +554,7 @@ def setup_email_otp():
         return redirect(url_for('login'))
     username = session.get('username')
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
+    cursor.execute("SELECT * FROM accounts WHERE username = %s", [username])
     account = cursor.fetchone()
     cursor.execute("SELECT * FROM account_settings WHERE user_id = %s", (account['id'],))
     settings = cursor.fetchone()
@@ -594,7 +595,7 @@ def verify_otp():
     username = session.get('tmp_user', {}).get('username') or session.get('username')
 
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
+    cursor.execute("SELECT * FROM accounts WHERE username = %s", [username])
     account = cursor.fetchone()
 
     cursor.execute("SELECT * FROM account_settings WHERE user_id = %s", (account['id'],))
@@ -660,7 +661,7 @@ def oauth_username():
         hashed_token = session['oauth_token']  # Retrieve the hashed token from the session
 
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
+        cursor.execute("SELECT * FROM accounts WHERE username = %s", [username])
         account = cursor.fetchone()
 
         if account:
@@ -676,7 +677,7 @@ def oauth_username():
         # Insert new user into the accounts table and get the user_id
         cursor.execute(
             "INSERT INTO accounts (username, email, password_hash, settings_id) VALUES (%s, %s, %s, %s)",
-            (username, email, password, settings_id)
+            [username, email, password, settings_id]
         )
         mysql.connection.commit()
         user_id = cursor.lastrowid
@@ -684,11 +685,11 @@ def oauth_username():
         # Insert a new record into the account_settings table for the new user
         cursor.execute(
             "INSERT INTO account_settings (user_id, oauth_token, generated_password) VALUES (%s, %s, %s)",
-            (user_id, hashed_token, 1)  # Store the hashed token and set generated_password to 1
+            [user_id, hashed_token, 1]  # Store the hashed token and set generated_password to 1
         )
         cursor.execute(
             "INSERT INTO associates (user_id) VALUES (%s)",
-            (user_id,)
+            [user_id]
         )
         mysql.connection.commit()
         cursor.close()
@@ -699,19 +700,22 @@ def oauth_username():
     return render_template('oauth_username.html', user=session.get('username'), nav_current='oauth_username', title='Choose Username', form=form)
 
 @app.route('/rsz-img')
-@cache.cached(timeout=60*60*24*30)  # Cache the result for 30 days
+@cache.cached(timeout=60*60*24*30)
 def resize_image():
     image_path = request.args.get('url')
     if not image_path or not os.path.exists(image_path):
         abort(404, description="Image not found")
 
+    force_cache = request.args.get('c') == 'force'
+    if force_cache:
+        cache.delete(request.full_path)
+
     width = request.args.get('w')
     height = request.args.get('h')
-    scale = request.args.get('s', '100')  # Default scale is 100
-    format = request.args.get('f', 'png').lower()  # Get the format from the query parameter, default to 'png'
-    quality = int(request.args.get('q', '95'))  # Get the quality from the query parameter, default to '95'
+    scale = request.args.get('s', '100')
+    format = request.args.get('f', 'png').lower()
+    quality = int(request.args.get('q', '95'))
 
-    # Open the image using Pillow
     img = Image.open(image_path)
     original_width, original_height = img.size
 
@@ -730,10 +734,8 @@ def resize_image():
         width = int(original_width * scale)
         height = int(original_height * scale)
 
-    # Resize the image
     img = img.resize((width, height), Image.Resampling.LANCZOS)
 
-    # Compress the image
     img_io = io.BytesIO()
     if format == 'jpg':
         img.save(img_io, format='JPEG', quality=quality, optimize=True)
@@ -783,7 +785,7 @@ class User(UserMixin):
     @staticmethod
     def get_user_by_username(username):
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
+        cursor.execute("SELECT * FROM accounts WHERE username = %s", [username])
         user_data = cursor.fetchone()
         cursor.close()
         if user_data:
@@ -803,7 +805,7 @@ login_manager.init_app(app)
 @login_manager.user_loader
 def load_user(user_id):
     cursor = mysql.connection.cursor()
-    cursor.execute("SELECT * FROM accounts WHERE id = %s", (user_id,))
+    cursor.execute("SELECT * FROM accounts WHERE id = %s", [user_id])
     user_data = cursor.fetchone()
     cursor.close()
     if user_data:
@@ -814,7 +816,7 @@ def load_user(user_id):
 def unlock(user_id):
     cursor = mysql.connection.cursor()
     cursor.execute("UPDATE accounts SET is_locked = %s, login_attempts = %s WHERE id = %s",
-                   (False, 0, user_id))
+                   [False, 0, user_id])
     mysql.connection.commit()
     cursor.close()
     flash('Account unlocked successfully.')
