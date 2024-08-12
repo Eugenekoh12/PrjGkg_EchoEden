@@ -161,8 +161,7 @@ def login():
         account = cursor.fetchone()
 
         if account:
-            user_data = User.get_user_by_username(username)
-            user = User(id=user_data['id'], username=user_data['username'], password=user_data['password'], login_attempts=user_data['login_attempts'], is_locked=user_data['is_locked'])
+            user = User.get_user_by_username(username)
 
             if user and not user.is_locked:
                 if bcrypt.check_password_hash(user.password, password):
@@ -226,7 +225,25 @@ Echo Eden
         print(f"Failed to send email notification to {email}: {str(e)}")
         app.logger.error(f"Failed to send email notification to {email}: {str(e)}")
 
+def send_otp_email(email, otp):
+    msg = Message('OTP for Email Verification',
+                  sender=app.config['MAIL_USERNAME'],
+                  recipients=[email])
+    msg.body = f"""Dear User,
+Your OTP code is: {otp}.
 
+Please note that it is valid for only 2 minutes.
+
+If this wasn't you, please take appropriate action to secure your account.
+
+Best regards,
+Echo Eden"""
+    try:
+        print(f"Attempting to send email to {email}")
+        mail.send(msg)
+        print(f"Email sent successfully to {email}")
+    except Exception as e:
+        print(f"Failed to send OTP to {email}: {str(e)}")
 
 @app.route('/verify-id', methods=['POST'])
 @login_required
@@ -789,7 +806,7 @@ class User(UserMixin):
         user_data = cursor.fetchone()
         cursor.close()
         if user_data:
-            return User(id=user_data['id'], username=user_data['username'], password=user_data['password'], login_attempts=user_data['login_attempts'], is_locked=user_data['is_locked'])
+            return User(**user_data)
         return None
 
     def update_login_attempts(self):
