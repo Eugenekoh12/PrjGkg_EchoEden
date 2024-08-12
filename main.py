@@ -764,6 +764,14 @@ def unlock(user_id):
     flash('Account unlocked successfully.')
     return redirect(url_for('admin_dashboard'))
 
+@app.route('/admin_dashboard')
+@login_required
+def admin_dashboard():
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT id, username, email, is_locked FROM accounts WHERE is_locked = TRUE")
+    locked_users = cursor.fetchall()
+    cursor.close()
+    return render_template('admin_dashboard.html', locked_users=locked_users)
 
 
 if __name__ == "__main__":
