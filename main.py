@@ -3,6 +3,7 @@ from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 from flask_wtf import FlaskForm, RecaptchaField
 from flask_login import UserMixin, LoginManager, login_user, login_required
+from flask_caching import Cache
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo
 from forms import RegistrationForm
@@ -10,7 +11,7 @@ from flask_mail import Mail, Message
 from datetime import datetime, timedelta
 from authlib.integrations.flask_client import OAuth
 from functools import wraps
-from PIL import Image
+from PIL import Image, ImageFile
 from werkzeug.security import check_password_hash
 import MySQLdb.cursors, re, json, requests, pyotp, time, qrcode, io, base64, logging, socket, struct, secrets, uuid, os
 
@@ -29,6 +30,9 @@ app = Flask(__name__)
 bcrypt = Bcrypt(app)
 mail = Mail(app)
 current_2fa_status = None
+
+cache = Cache(config={'CACHE_TYPE': 'simple'})
+cache.init_app(app)
 
 app.secret_key = 'the722semanticTOBOGGANS5smoothly.leutinizesTHEpointy3barrelOFgunpowder'
 # app.permanent_session_lifetime = timedelta(minutes=60)
@@ -133,6 +137,7 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    user = None
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -190,7 +195,8 @@ def login():
         else:
             flash('Invalid username or password', 'warning')
 
-    return render_template('login.html', user=session.get('username'), nav_current='login', title='Login')
+    return render_template('login.html', nav_current='login', title='Login', user=user)
+
 
 
 def send_login_notification(email, success, ip_address, login_type):
@@ -485,7 +491,6 @@ def googleCallback():
 @app.route("/")
 @app.route("/dashboard")
 @app.route("/home")
-@login_required
 def home():
     global current_2fa_status
     return render_template("home.html", user=session.get('username'), nav_current='home', twofactor=current_2fa_status)
@@ -578,7 +583,6 @@ def setup_email_otp():
         flash('Email OTP sent. Please check your email.', 'info')
     cursor.close()
     return render_template('setup_email_otp.html', user=session.get('username'), nav_current='setup2fa_email', secret=secret)
-
 
 @app.route('/verify-otp', methods=['GET', 'POST'])
 def verify_otp():
@@ -695,6 +699,7 @@ def oauth_username():
     return render_template('oauth_username.html', user=session.get('username'), nav_current='oauth_username', title='Choose Username', form=form)
 
 @app.route('/rsz-img')
+@cache.cached(timeout=60*60*24*30)  # Cache the result for 30 days
 def resize_image():
     image_path = request.args.get('url')
     if not image_path or not os.path.exists(image_path):
@@ -702,30 +707,43 @@ def resize_image():
 
     width = request.args.get('w')
     height = request.args.get('h')
+    scale = request.args.get('s', '100')  # Default scale is 100
+    format = request.args.get('f', 'png').lower()  # Get the format from the query parameter, default to 'png'
+    quality = int(request.args.get('q', '95'))  # Get the quality from the query parameter, default to '95'
 
     # Open the image using Pillow
     img = Image.open(image_path)
     original_width, original_height = img.size
 
-    if width and not height:
-        width = int(width)
-        height = int((width / original_width) * original_height)
-    elif height and not width:
-        height = int(height)
-        width = int((height / original_height) * original_width)
+    if width or height:
+        if width and not height:
+            width = int(width)
+            height = int((width / original_width) * original_height)
+        elif height and not width:
+            height = int(height)
+            width = int((height / original_height) * original_width)
+        else:
+            width = int(width) if width else original_width
+            height = int(height) if height else original_height
     else:
-        width = int(width) if width else original_width
-        height = int(height) if height else original_height
+        scale = float(scale) / 100
+        width = int(original_width * scale)
+        height = int(original_height * scale)
 
     # Resize the image
     img = img.resize((width, height), Image.Resampling.LANCZOS)
 
-    # Save the resized image to a BytesIO object
+    # Compress the image
     img_io = io.BytesIO()
-    img.save(img_io, 'PNG')
+    if format == 'jpg':
+        img.save(img_io, format='JPEG', quality=quality, optimize=True)
+    elif format == 'webp':
+        img.save(img_io, format='WEBP', quality=quality, lossless=True)
+    else:
+        img.save(img_io, format='PNG', optimize=True)
     img_io.seek(0)
 
-    return send_file(img_io, mimetype='image/png')
+    return send_file(img_io, mimetype=f'image/{format}')
 
 @app.route("/logout")
 def logout():
