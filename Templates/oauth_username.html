@@ -24,6 +24,6 @@
     <form action="/oauth-username" method="POST">
         <label for="username">Choose a username:</label>
         {{ form.username.label }} {{ form.username(size=24) }}
-        <input type="submit" value="Choose this Username">
+        <input type="button" value="Choose this Username" onclick="window.location.href='{{url_for('home')}}'">
     </form>
 {% endblock %}
