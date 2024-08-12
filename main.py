@@ -195,6 +195,9 @@ def login():
             session['user_id'] = account['id']
             session['username'] = account['username']
 
+            # Send login notification email
+            send_login_notification(account['email'], True, client_ip, "Normal Login")
+
             flash('Login successful!', 'success')
             return redirect(url_for('home'))
         else:
