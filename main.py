@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 from flask_wtf import FlaskForm, RecaptchaField
+from flask_login import UserMixin, LoginManager, login_user, login_required
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo
 from forms import RegistrationForm
@@ -10,6 +11,7 @@ from datetime import datetime, timedelta
 from authlib.integrations.flask_client import OAuth
 from functools import wraps
 from PIL import Image
+from werkzeug.security import check_password_hash
 import MySQLdb.cursors, re, json, requests, pyotp, time, qrcode, io, base64, logging, socket, struct, secrets, uuid, os
 
 #captcha Glenys
@@ -381,10 +383,7 @@ def session_history():
         elif isinstance(session_data['ip_address'], bytes):
             session_data['ip_address'] = socket.inet_ntoa(session_data['ip_address'])
 
-    return render_template('session_history.html', nav_current='sessions', sessions=sessions)
-
-
-
+    return render_template('session_history.html', user=session.get('username'), nav_current='sessions', sessions=sessions)
 
 # https://www.youtube.com/watch?v=fZLWO3_V06Q - reference video
 appConf = {
@@ -409,7 +408,6 @@ oauth.register(
     },
     server_metadata_url=f'{appConf.get("OAUTH2_META_URL")}',
 )
-
 
 @app.route("/signin-google")
 def googleCallback():
@@ -493,7 +491,6 @@ def googleCallback():
         flash(f'Google login failed: {str(e)}', 'warning')
         return redirect(url_for("home"))
 
-
 @app.route("/")
 @app.route("/dashboard")
 @app.route("/home")
@@ -509,31 +506,6 @@ def googleLogin():
     # if you are cayden comment the if statement cuz SOMEHOW IT DOESN'T WORK FOR HIM
         # Need to inform user they're logged in.
     return oauth.myApp.authorize_redirect(redirect_uri=url_for("googleCallback", _external=True))
-
-
-@app.route("/logout")
-def logout():
-    global current_2fa_status
-    current_2fa_status = None
-    session['2fa'] = None
-    session['username'] = None
-    session['user'] = None
-    session.pop("2fa", None)
-    session.pop("username", None)
-    session.pop("user", None)
-    if 'session_id' in session:
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("""
-            UPDATE user_sessions 
-            SET status = 'logged_out'
-            WHERE session_id = %s
-        """, (session['session_id'],))
-        mysql.connection.commit()
-        cursor.close()
-
-    session.clear()
-    flash('You have been logged out.', 'info')
-    return redirect(url_for("home"))
 
 @app.route('/setup-totp', methods=['GET', 'POST'])
 def setup_totp():
@@ -691,11 +663,32 @@ def resize_image():
 
     return send_file(img_io, mimetype='image/png')
 
+@app.route("/logout")
+def logout():
+    global current_2fa_status
+    current_2fa_status = None
+    session['2fa'] = None
+    session['username'] = None
+    session['user'] = None
+    session.pop("2fa", None)
+    session.pop("username", None)
+    session.pop("user", None)
+    if 'session_id' in session:
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("""
+            UPDATE user_sessions 
+            SET status = 'logged_out'
+            WHERE session_id = %s
+        """, (session['session_id'],))
+        mysql.connection.commit()
+        cursor.close()
+
+    session.clear()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for("home"))
+
 for rule in app.url_map.iter_rules():
     print(rule)
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
-
-#glenys push
-
