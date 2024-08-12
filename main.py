@@ -32,6 +32,7 @@ class RegistrationForm(FlaskForm):
 app = Flask(__name__)
 bcrypt = Bcrypt(app)
 mail = Mail(app)
+current_2fa_status = None
 
 app.secret_key = 'the722semanticTOBOGGANS5smoothly.leutinizesTHEpointy3barrelOFgunpowder'
 # app.permanent_session_lifetime = timedelta(minutes=60)
@@ -195,6 +196,7 @@ def login():
             flash('Invalid username or password', 'warning')
 
     return render_template('login.html', title='Login')
+
 
 def send_login_notification(email, success, ip_address, login_type):
     status = "successful" if success else "failed"
@@ -493,7 +495,8 @@ def googleCallback():
 @app.route("/")
 @app.route("/home")
 def home():
-    return render_template("home.html", user=session.get('username'))
+    global current_2fa_status
+    return render_template("home.html", user=session.get('username'), twofactor=current_2fa_status)
 
 @app.route("/google-login")
 def googleLogin():
@@ -507,6 +510,8 @@ def googleLogin():
 
 @app.route("/logout")
 def logout():
+    global current_2fa_status
+    current_2fa_status = None
     session['2fa'] = None
     session['username'] = None
     session['user'] = None
@@ -532,7 +537,7 @@ def setup_totp():
     if 'user' not in session:
         return redirect(url_for('login'))
 
-    username = session['user']['username']
+    username = session.get('username')
 
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
@@ -545,6 +550,8 @@ def setup_totp():
         token = request.form['token']
         if pyotp.TOTP(settings['2fa_token_totp']).verify(token):
             session['2fa'] = True
+            global current_2fa_status
+            current_2fa_status = True
             flash('2FA setup successful!', 'success')
             return redirect(url_for('home'))
         else:
@@ -587,6 +594,8 @@ def verify_totp():
         token = request.form['token']
         if pyotp.TOTP(settings['2fa_token_totp']).verify(token):
             session['2fa'] = True
+            global current_2fa_status
+            current_2fa_status = True
             session['username'] = username
             session['user'] = session['tmp_user']
             del session['tmp_user']
@@ -654,4 +663,4 @@ for rule in app.url_map.iter_rules():
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
 
-
+#glenys push
