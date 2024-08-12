@@ -127,7 +127,7 @@ def register():
         flash('Account created for {}! You can now log in.'.format(username), 'success')
         return redirect(url_for('home'))
 
-    return render_template('register.html', title='Register', form=form)
+    return render_template('register.html', user=session.get('username'), nav_current='login', title='Register', form=form)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -191,7 +191,7 @@ def login():
         else:
             flash('Invalid username or password', 'warning')
 
-    return render_template('login.html', title='Login')
+    return render_template('login.html', user=session.get('username'), nav_current='login', title='Login')
 
 
 def send_login_notification(email, success, ip_address, login_type):
@@ -250,7 +250,7 @@ def session_history():
         else:
             session_data['browser'] = 'Other'
 
-    return render_template('session_history.html', sessions=sessions)
+    return render_template('session_history.html', user=session.get('username'), nav_current='sessions', sessions=sessions)
 
 
 
@@ -368,7 +368,7 @@ def googleCallback():
 @app.route('/dashboard')
 def home():
     global current_2fa_status
-    return render_template("home.html", user=session.get('username'), twofactor=current_2fa_status)
+    return render_template("home.html", user=session.get('username'), nav_current='home', twofactor=current_2fa_status)
 
 @app.route("/google-login")
 def googleLogin():
@@ -445,7 +445,7 @@ def setup_totp():
 
     cursor.close()
 
-    return render_template('setup_totp.html', img_b64=img_b64, secret=secret)
+    return render_template('setup_totp.html', user=session.get('username'), nav_current='setup2fa', img_b64=img_b64, secret=secret)
 
 @app.route('/verify-totp', methods=['GET', 'POST'])
 def verify_totp():
@@ -526,7 +526,7 @@ def oauth_username():
         flash('Account created for {}! You can now log in.'.format(username), 'success')
         return redirect(url_for('home'))
 
-    return render_template('oauth_username.html', title='Choose Username', form=form)
+    return render_template('oauth_username.html', user=session.get('username'), nav_current='oauth_username', title='Choose Username', form=form)
 
 
 for rule in app.url_map.iter_rules():

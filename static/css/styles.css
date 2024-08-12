@@ -1,11 +1,89 @@
 /* styles.css */
+:root {
+  --color-text: #02090D;
+  --color-text-alt: #000708;
+  --color-bg: #EFF8FD;
+  --color-bg-alt: #EBF4F5;
+  --color-primary: #34ABE4;
+  --color-primary-overlay: #1A89DA;
+  --color-primary-shaded: #91D1F0;
+  --color-secondary: #A787EF;
+  --color-secondary-overlay: #7C57E9;
+  --color-secondary-shaded: #D3CDF7;
+  --color-accent: #C060EA;
+  --color-accent-overlay: #A139E2;
+  --color-accent-shaded: #DDBEF5;
+  --opp-color-text: #F2F9FD;
+  --opp-color-text-alt: #F4FBFF;
+  --opp-color-bg: #041B26;
+  --opp-color-bg-alt: #081F2E;
+  --opp-color-primary: #1A93CB;
+  --opp-color-primary-overlay: #25C6E4;
+  --opp-color-primary-shaded: #0C4864;
+  --opp-color-secondary: #301179;
+  --opp-color-secondary-overlay: #4519B4;
+  --opp-color-secondary-shaded: #141745;
+  --opp-color-accent: #75159E;
+  --opp-color-accent-overlay: #A81FCD;
+  --opp-color-accent-shaded: #2E1853;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+      --color-text: #F2F9FD;
+      --color-text-alt: #F4FBFF;
+      --color-bg: #041B26;
+      --color-bg-alt: #081F2E;
+      --color-primary: #1A93CB;
+      --color-primary-overlay: #25C6E4;
+      --color-primary-shaded: #0C4864;
+      --color-secondary: #301179;
+      --color-secondary-overlay: #4519B4;
+      --color-secondary-shaded: #141745;
+      --color-accent: #75159E;
+      --color-accent-overlay: #A81FCD;
+      --color-accent-shaded: #2E1853;
+      --opp-color-text: #02090D;
+      --opp-color-text-alt: #000708;
+      --opp-color-bg: #EFF8FD;
+      --opp-color-bg-alt: #EBF4F5;
+      --opp-color-primary: #34ABE4;
+      --opp-color-primary-overlay: #1A89DA;
+      --opp-color-primary-shaded: #91D1F0;
+      --opp-color-secondary: #A787EF;
+      --opp-color-secondary-overlay: #7C57E9;
+      --opp-color-secondary-shaded: #D3CDF7;
+      --opp-color-accent: #C060EA;
+      --opp-color-accent-overlay: #A139E2;
+      --opp-color-accent-shaded: #DDBEF5;
+    }
+}
 
 /* General Styles */
 html, body {
     font-family: Arial, Helvetica, sans-serif;
-    background-color: #f5f5f5;
+    background-color: var(--color-bg);
+    color: var(--color-text);
     margin: 0;
     padding: 0;
+}
+/* unvisited link */
+a:link {
+  color: var(--color-primary-overlay);
+}
+
+/* visited link */
+a:visited {
+  color: var(--color-accent-overlay);
+}
+
+/* mouse over link */
+a:hover {
+  color: var(--color-secondary-overlay);
+}
+
+/* selected link */
+a:active {
+  color: var(--color-secondary-overlay);
 }
 
 /* Container */
@@ -13,7 +91,7 @@ html, body {
     max-width: 500px;
     margin: 50px auto;
     padding: 20px;
-    background-color: #fff;
+    background-color: var(--color-bg-alt);
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     border-radius: 8px;
 }
@@ -21,7 +99,7 @@ html, body {
 /* Heading */
 h1 {
     text-align: center;
-    color: #333;
+    color: var(--color-text-alt);
     margin-bottom: 20px;
 }
 
@@ -33,7 +111,7 @@ form {
 
 label {
     margin-bottom: 5px;
-    color: #555;
+    color: var(--color-text-alt);
 }
 
 input[type="text"],
@@ -48,16 +126,16 @@ input[type="email"] {
 input[type="submit"],
 button {
     padding: 10px;
-    background-color: #007bff;
+    background-color: var(--color-primary);
     border: none;
     border-radius: 4px;
-    color: #fff;
+    color: var(--color-text);
     cursor: pointer;
 }
 
 input[type="submit"]:hover,
 button:hover {
-    background-color: #0056b3;
+    background-color: var(--color-accent);
 }
 
 /* Flash Messages */
@@ -113,8 +191,51 @@ button:hover {
     color: green;
 }
 
+/** Navbar **/
+
+nav ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--color-bg-alt);
+  position: fixed;
+  top: 0;
+  width: 100%;
+}
+
+nav li {
+  float: left;
+  border-right:1px solid #bbb;
+}
+
+nav li:last-child {
+  border-right: none;
+}
+
+nav li a {
+  display: block;
+  color: var(--opp-color-text);
+  text-align: center;
+  padding: 14px 16px;
+  text-decoration: none;
+}
+
+nav li a:hover:not(.active) {
+  background-color: var(--opp-color-primary-shaded);
+}
+
+nav .active {
+  background-color: var(--opp-color-primary);
+}
+
+.content {
+    padding-top: 30px;
+}
+
 span.clear { clear: left; display: block; }
 
+/** Google Sign In Button **/
 .gsi-material-button {
   -moz-user-select: none;
   -webkit-user-select: none;

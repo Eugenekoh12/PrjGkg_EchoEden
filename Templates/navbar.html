@@ -1,0 +1,12 @@
+<!-- Navbar -->
+<nav>
+    <ul>
+      <li><a class="{% if nav_current == 'home' %}active{% endif %}" href="{{ url_for('home') }}">Echo Eden</a></li>
+      {% if user|default(None) is defined and user|default(None) is not none %}
+            <li><a class="{% if nav_current == 'sessions' %}active{% endif %}" href="{{ url_for('session_history') }}">Sessions</a></li>
+            <li style="float:right"><a href="{{ url_for('logout') }}">Logout</a></li>
+      {% else %}
+            <li class="{% if nav_current == 'login' %}active{% endif %}" style="float:right"><a href="{{ url_for('login') }}">Login / Register</a></li>
+      {% endif %}
+    </ul>
+</nav>
