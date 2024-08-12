@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ID Verification - NRIC Scan</title>
+    <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
+</head>
+<body>
+    <h1>ID Verification - NRIC Scan</h1>
+    {% if verification_status == 'verified' %}
+        <p>Your NRIC has been verified successfully.</p>
+    {% else %}
+        <p>Please scan your NRIC for verification.</p>
+        <video id="video" width="640" height="480" autoplay></video>
+        <button id="capture">Capture NRIC</button>
+        <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+    {% endif %}
+    <p id="result"></p>
+    <p id="debug"></p>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureButton = document.getElementById('capture');
+        const resultParagraph = document.getElementById('result');
+        const debugParagraph = document.getElementById('debug');
+
+        if (video && captureButton) {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+                .then(stream => {
+                    video.srcObject = stream;
+                })
+                .catch(err => {
+                    console.error("Error accessing the camera", err);
+                    resultParagraph.textContent = "Error accessing the camera. Please make sure you've granted camera permissions.";
+                });
+
+            captureButton.addEventListener('click', () => {
+                canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageDataUrl = canvas.toDataURL('image/jpeg');
+
+                resultParagraph.textContent = "Processing image...";
+
+                Tesseract.recognize(imageDataUrl, 'eng', { logger: m => console.log(m) })
+                    .then(({ data: { text } }) => {
+                        debugParagraph.textContent = "OCR Result: " + text;
+
+                        function findNRIC(text) {
+                            // Remove spaces and convert to uppercase
+                            text = text.replace(/\s/g, '').toUpperCase();
+
+                            // Look for patterns like S1234567A, T1234567B, etc.
+                            // Now also including O as a possible first digit
+                            const nricRegex = /[STFG][O0-9]\d{6}[A-Z]/g;
+                            const matches = text.match(nricRegex);
+
+                            if (matches && matches.length > 0) {
+                                // Replace 'O' with '0' if it's the second character
+                                return matches[0].charAt(1) === 'O' ?
+                                    matches[0].charAt(0) + '0' + matches[0].slice(2) :
+                                    matches[0];
+                            }
+
+                            return null;
+                        }
+
+                        const nric = findNRIC(text);
+
+                        if (nric) {
+                            resultParagraph.textContent = `NRIC detected: ${nric}. Verifying...`;
+                            verifyNRIC(nric);
+                        } else {
+                            resultParagraph.textContent = "No valid NRIC detected. Please try again.";
+                            debugParagraph.textContent += "\nNo NRIC pattern found in the text.";
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Error processing image", err);
+                        resultParagraph.textContent = "Error processing image. Please try again.";
+                        debugParagraph.textContent = "OCR Error: " + err.message;
+                    });
+            });
+        }
+
+        function verifyNRIC(nric) {
+            fetch('/verify-id', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `id_number=${encodeURIComponent(nric)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    resultParagraph.textContent = data.error;
+                } else {
+                    resultParagraph.textContent = data.message;
+                    setTimeout(() => location.reload(), 2000);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                resultParagraph.textContent = 'An error occurred during verification. Please try again.';
+            });
+        }
+    </script>
+</body>
+</html>
