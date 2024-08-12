@@ -542,6 +542,44 @@ def setup_totp():
 
     return render_template('setup_totp.html', user=session.get('username'), nav_current='setup2fa', img_b64=img_b64, secret=secret)
 
+@app.route('/setup-email-otp', methods=['GET', 'POST'])
+def setup_email_otp():
+    if "username" not in session:
+        return redirect(url_for('login'))
+    username = session.get('username')
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
+    account = cursor.fetchone()
+    cursor.execute("SELECT * FROM account_settings WHERE user_id = %s", (account['id'],))
+    settings = cursor.fetchone()
+    secret = None  # Initialize 'secret' to None
+    if request.method == 'POST':
+        token = request.form['token']
+        if pyotp.TOTP(settings['2fa_token_email_totp'], interval=120).verify(token):
+            cursor.execute("UPDATE account_settings SET 2fa_token_email = 1 WHERE user_id = %s", (account['id'],))
+            mysql.connection.commit()
+            session['2fa'] = True
+            global current_2fa_email_status
+            current_2fa_email_status = True
+            flash('Email OTP setup successful!', 'success')
+            return redirect(url_for('home'))
+        else:
+            flash('Invalid token', 'warning')
+    else:
+        if settings and settings['2fa_token_email_totp']:
+            secret = settings['2fa_token_email_totp']
+        else:
+            secret = pyotp.random_base32()
+            cursor.execute("UPDATE account_settings SET 2fa_token_email_totp = %s WHERE user_id = %s", (secret, account['id'],))
+            mysql.connection.commit()
+        # Send OTP to user's email
+        otp = pyotp.TOTP(secret, interval=120).now()
+        send_otp_email(account['email'], otp)
+        flash('Email OTP sent. Please check your email.', 'info')
+    cursor.close()
+    return render_template('setup_email_otp.html', user=session.get('username'), nav_current='setup2fa_email', secret=secret)
+
+
 @app.route('/verify-otp', methods=['GET', 'POST'])
 def verify_otp():
     global current_2fa_totp_status
@@ -574,7 +612,7 @@ def verify_otp():
             session['user'] = session['tmp_user']
             del session['tmp_user']
             session.pop('previous_otp', None)
-            login_user(account)  # Log in the user after successful OTP verification
+            login_user(account)
             flash('Login successful!', 'success')
             return redirect(url_for('home'))
         else:
