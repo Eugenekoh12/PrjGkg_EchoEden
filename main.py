@@ -15,6 +15,8 @@ from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo
 import re
 import logging
+import socket
+import struct
 
 #captcha Glenys
 
@@ -166,16 +168,20 @@ def login():
             # Generate a unique session ID
             session_id = str(uuid.uuid4())
 
+            # Get client IP
+            client_ip = get_client_ip()
+
             # Store session details in the database
             session_data = {
                 'user_id': account['id'],
                 'username': account['username'],
-                'login_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                'login_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'ip_address': client_ip
             }
             cursor.execute("""
                 INSERT INTO user_sessions (session_id, user_id, ip_address, user_agent, data, status)
                 VALUES (%s, %s, %s, %s, %s, 'active')
-            """, (session_id, account['id'], request.remote_addr, request.user_agent.string, json.dumps(session_data)))
+            """, (session_id, account['id'], client_ip, request.user_agent.string, json.dumps(session_data)))
             mysql.connection.commit()
 
             # Store session ID in Flask session
@@ -189,7 +195,6 @@ def login():
             flash('Invalid username or password', 'warning')
 
     return render_template('login.html', title='Login')
-
 
 def send_login_notification(email, success, ip_address, login_type):
     status = "successful" if success else "failed"
@@ -217,9 +222,6 @@ Echo Eden
         print(f"Failed to send email notification to {email}: {str(e)}")
         app.logger.error(f"Failed to send email notification to {email}: {str(e)}")
 
-
-from flask import request, jsonify
-import re
 
 
 @app.route('/verify-id', methods=['POST'])
@@ -316,6 +318,29 @@ def id_verification_page():
     return render_template('id_verification.html', verification_status=verification_status)
 
 #session
+
+def get_client_ip():
+# Check for proxy headers first
+    if request.headers.get('X-Forwarded-For'):
+        # X-Forwarded-For header typically contains a comma-separated list of IPs
+        # The client's IP is usually the first one
+        ip = request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    elif request.headers.get('X-Real-IP'):
+        ip = request.headers.get('X-Real-IP')
+    else:
+        # If no proxy headers are present, use the remote address
+        ip = request.remote_addr
+
+    # Exclude local testing IP
+    if ip == '127.0.0.1':
+        # This is a local request, try to get LAN IP
+        import socket
+
+        hostname = socket.gethostname()
+        ip = socket.gethostbyname(hostname)
+
+    return ip
+
 @app.route('/session-history')
 @login_required
 def session_history():
@@ -330,21 +355,27 @@ def session_history():
     sessions = cursor.fetchall()
     cursor.close()
 
-    # Process the sessions to extract browser information
+    # Process the sessions to extract browser information and handle IP addresses
     for session_data in sessions:
         user_agent = session_data['user_agent'].lower()
-        if 'chrome' in user_agent:
+        if 'chrome' in user_agent and 'edg' in user_agent:
+            session_data['browser'] = 'Edge'
+        elif 'chrome' in user_agent:
             session_data['browser'] = 'Chrome'
         elif 'firefox' in user_agent:
             session_data['browser'] = 'Firefox'
         elif 'safari' in user_agent:
             session_data['browser'] = 'Safari'
-        elif 'edge' in user_agent:
-            session_data['browser'] = 'Edge'
-        elif 'opera' in user_agent:
+        elif 'opera' in user_agent or 'opr' in user_agent:
             session_data['browser'] = 'Opera'
         else:
             session_data['browser'] = 'Other'
+
+        # Handle IP address
+        if isinstance(session_data['ip_address'], int):
+            session_data['ip_address'] = socket.inet_ntoa(struct.pack('!L', session_data['ip_address']))
+        elif isinstance(session_data['ip_address'], bytes):
+            session_data['ip_address'] = socket.inet_ntoa(session_data['ip_address'])
 
     return render_template('session_history.html', sessions=sessions)
 
@@ -622,4 +653,5 @@ for rule in app.url_map.iter_rules():
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
+
 
