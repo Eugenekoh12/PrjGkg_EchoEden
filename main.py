@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, abort
 from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
+from flask import jsonify, render_template
 from forms import RegistrationForm
 from flask_mail import Mail, Message
 from datetime import datetime, timedelta
@@ -12,6 +13,10 @@ import uuid
 from flask_wtf import FlaskForm, RecaptchaField
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo
+import re
+import logging
+import socket
+import struct
 
 #captcha Glenys
 
@@ -169,22 +174,29 @@ def login():
             # Generate a unique session ID
             session_id = str(uuid.uuid4())
 
+            # Get client IP
+            client_ip = get_client_ip()
+
             # Store session details in the database
             session_data = {
                 'user_id': account['id'],
                 'username': account['username'],
-                'login_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                'login_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'ip_address': client_ip
             }
             cursor.execute("""
                 INSERT INTO user_sessions (session_id, user_id, ip_address, user_agent, data, status)
                 VALUES (%s, %s, %s, %s, %s, 'active')
-            """, (session_id, account['id'], request.remote_addr, request.user_agent.string, json.dumps(session_data)))
+            """, (session_id, account['id'], client_ip, request.user_agent.string, json.dumps(session_data)))
             mysql.connection.commit()
 
             # Store session ID in Flask session
             session['session_id'] = session_id
             session['user_id'] = account['id']
             session['username'] = account['username']
+
+            # Send login notification email
+            send_login_notification(account['email'], True, client_ip, "Normal Login")
 
             flash('Login successful!', 'success')
             return redirect(url_for('home'))
@@ -219,7 +231,126 @@ Echo Eden
     except Exception as e:
         print(f"Failed to send email notification to {email}: {str(e)}")
         app.logger.error(f"Failed to send email notification to {email}: {str(e)}")
+
+
+
+@app.route('/verify-id', methods=['POST'])
+@login_required
+def verify_id():
+    id_number = request.form.get('id_number')
+
+    if not id_number:
+        return jsonify({'error': 'ID number is required'}), 400
+
+    # Validate NRIC format
+    if not re.match(r'^[STFG]\d{7}[A-Z]$', id_number):
+        return jsonify({'error': 'Invalid NRIC format'}), 400
+
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Check if the NRIC is already used
+    cursor.execute("SELECT * FROM id_verification WHERE id_number = %s", (id_number,))
+    existing_verification = cursor.fetchone()
+
+    if existing_verification:
+        if existing_verification['user_id'] == session['user_id']:
+            return jsonify({'message': 'This NRIC is already verified for your account'}), 200
+        else:
+            return jsonify({'error': 'This NRIC is already registered to another account'}), 400
+
+    # Insert the new ID verification record
+    try:
+        cursor.execute(
+            "INSERT INTO id_verification (user_id, id_number, status) VALUES (%s, %s, 'verified')",
+            (session['user_id'], id_number)
+        )
+        mysql.connection.commit()
+        return jsonify({'message': 'NRIC verified successfully'}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+    finally:
+        cursor.close()
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+
+@app.route('/test-verify-id/<test_id>', methods=['GET'])
+def test_verify_id(test_id):
+    # Simulate a POST request to /verify-id
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['user_id'] = 1  # Assume user 1 for testing
+
+        response = client.post('/verify-id', data={'id_number': test_id})
+
+        logger.info(f"Test verification attempt: User ID 1 tried to verify NRIC {test_id}")
+        logger.info(f"Response: {response.get_data(as_text=True)}")
+
+        return response.get_data(as_text=True), response.status_code
+
+
+@app.route('/test-duplicate-verify/<test_id>', methods=['GET'])
+def test_duplicate_verify(test_id):
+    # First verification
+    first_response = test_verify_id(test_id)
+
+    # Second verification (should fail)
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['user_id'] = 2  # Assume a different user
+
+        response = client.post('/verify-id', data={'id_number': test_id})
+
+        logger.info(f"Test duplicate verification attempt: User ID 2 tried to verify NRIC {test_id}")
+        logger.info(f"Response: {response.get_data(as_text=True)}")
+
+        return (f"First attempt: {first_response}\n"
+                f"Second attempt: {response.get_data(as_text=True)}"), response.status_code
+
+
+
+def get_verification_status(user_id):
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT status FROM id_verification WHERE user_id = %s", (user_id,))
+    result = cursor.fetchone()
+    cursor.close()
+    return result['status'] if result else None
+
+
+@app.route('/id-verification')
+@login_required
+def id_verification_page():
+    verification_status = get_verification_status(session['user_id'])
+    return render_template('id_verification.html', verification_status=verification_status)
+
 #session
+
+def get_client_ip():
+# Check for proxy headers first
+    if request.headers.get('X-Forwarded-For'):
+        # X-Forwarded-For header typically contains a comma-separated list of IPs
+        # The client's IP is usually the first one
+        ip = request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    elif request.headers.get('X-Real-IP'):
+        ip = request.headers.get('X-Real-IP')
+    else:
+        # If no proxy headers are present, use the remote address
+        ip = request.remote_addr
+
+    # Exclude local testing IP
+    if ip == '127.0.0.1':
+        # This is a local request, try to get LAN IP
+        import socket
+
+        hostname = socket.gethostname()
+        ip = socket.gethostbyname(hostname)
+
+    return ip
+
 @app.route('/session-history')
 @login_required
 def session_history():
@@ -234,23 +365,29 @@ def session_history():
     sessions = cursor.fetchall()
     cursor.close()
 
-    # Process the sessions to extract browser information
+    # Process the sessions to extract browser information and handle IP addresses
     for session_data in sessions:
         user_agent = session_data['user_agent'].lower()
-        if 'chrome' in user_agent:
+        if 'chrome' in user_agent and 'edg' in user_agent:
+            session_data['browser'] = 'Edge'
+        elif 'chrome' in user_agent:
             session_data['browser'] = 'Chrome'
         elif 'firefox' in user_agent:
             session_data['browser'] = 'Firefox'
         elif 'safari' in user_agent:
             session_data['browser'] = 'Safari'
-        elif 'edge' in user_agent:
-            session_data['browser'] = 'Edge'
-        elif 'opera' in user_agent:
+        elif 'opera' in user_agent or 'opr' in user_agent:
             session_data['browser'] = 'Opera'
         else:
             session_data['browser'] = 'Other'
 
-    return render_template('session_history.html', user=session.get('username'), nav_current='sessions', sessions=sessions)
+        # Handle IP address
+        if isinstance(session_data['ip_address'], int):
+            session_data['ip_address'] = socket.inet_ntoa(struct.pack('!L', session_data['ip_address']))
+        elif isinstance(session_data['ip_address'], bytes):
+            session_data['ip_address'] = socket.inet_ntoa(session_data['ip_address'])
+
+    return render_template('session_history.html', nav_current='sessions', sessions=sessions)
 
 
 
