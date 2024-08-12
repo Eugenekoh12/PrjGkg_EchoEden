@@ -28,7 +28,8 @@ class RegistrationForm(FlaskForm):
 app = Flask(__name__)
 bcrypt = Bcrypt(app)
 mail = Mail(app)
-current_2fa_status = None
+current_2fa_totp_status = None
+current_2fa_email_status = None
 
 app.secret_key = 'the722semanticTOBOGGANS5smoothly.leutinizesTHEpointy3barrelOFgunpowder'
 # app.permanent_session_lifetime = timedelta(minutes=60)
@@ -194,8 +195,20 @@ def login():
             # Send login notification email
             send_login_notification(account['email'], True, client_ip, "Normal Login")
 
-            flash('Login successful!', 'success')
-            return redirect(url_for('home'))
+            # Check if 2FA is enabled
+            cursor.execute("SELECT * FROM account_settings WHERE user_id = %s", (account['id'],))
+            settings = cursor.fetchone()
+
+            if settings['2fa_token_totp'] or settings['2fa_token_email']:
+                # If 2FA is enabled, store the user in a temporary session and redirect to verify OTP
+                session['tmp_user'] = {
+                    'username': account['username'],
+                    'user_id': account['id']
+                }
+                return redirect(url_for('verify_otp'))
+            else:
+                flash('Login successful!', 'success')
+                return redirect(url_for('home'))
         else:
             flash('Invalid username or password', 'warning')
 
@@ -228,7 +241,26 @@ Echo Eden
         print(f"Failed to send email notification to {email}: {str(e)}")
         app.logger.error(f"Failed to send email notification to {email}: {str(e)}")
 
+def send_otp_email(email, otp):
+    msg = Message('Your OTP Code',
+                  sender=app.config['MAIL_USERNAME'],
+                  recipients=[email])
+    msg.body = (f"""Dear User,
+    
+Your OTP code is: {otp}.
+    
+Please note that it is valid for only 2 minutes.
 
+If this wasn't you, please take appropriate action to secure your account.
+
+Best regards,
+Echo Eden""")
+    try:
+        mail.send(msg)
+        print(f"OTP email sent successfully to {email}")
+    except Exception as e:
+        print(f"Failed to send OTP email to {email}: {str(e)}")
+        app.logger.error(f"Failed to send OTP email to {email}: {str(e)}")
 
 @app.route('/verify-id', methods=['POST'])
 @login_required
@@ -250,9 +282,9 @@ def verify_id():
 
     if existing_verification:
         if existing_verification['user_id'] == session['user_id']:
-            return jsonify({'message': 'This NRIC is already verified for your account'}), 200
+            return jsonify({'message': 'Your account has already been verified.'}), 200
         else:
-            return jsonify({'error': 'This NRIC is already registered to another account'}), 400
+            return jsonify({'error': 'This Identity Card is already registered to another account'}), 400
 
     # Insert the new ID verification record
     try:
@@ -261,7 +293,7 @@ def verify_id():
             (session['user_id'], id_number)
         )
         mysql.connection.commit()
-        return jsonify({'message': 'NRIC verified successfully'}), 200
+        return jsonify({'message': 'Identity verified successfully'}), 200
     except Exception as e:
         mysql.connection.rollback()
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
@@ -491,12 +523,14 @@ def googleCallback():
         flash(f'Google login failed: {str(e)}', 'warning')
         return redirect(url_for("home"))
 
-@app.route("/")
+
 @app.route("/dashboard")
 @app.route("/home")
+@app.route("/")
 def home():
-    global current_2fa_status
-    return render_template("home.html", user=session.get('username'), nav_current='home', twofactor=current_2fa_status)
+    global current_2fa_totp_status
+    global current_2fa_email_status
+    return render_template("home.html", user=session.get('username'), nav_current='home', twofactor_totp=current_2fa_totp_status, twofactor_email=current_2fa_email_status)
 
 @app.route("/google-login")
 def googleLogin():
@@ -525,8 +559,8 @@ def setup_totp():
         token = request.form['token']
         if pyotp.TOTP(settings['2fa_token_totp']).verify(token):
             session['2fa'] = True
-            global current_2fa_status
-            current_2fa_status = True
+            global current_2fa_totp_status
+            current_2fa_totp_status = True
             flash('2FA setup successful!', 'success')
             return redirect(url_for('home'))
         else:
@@ -550,12 +584,51 @@ def setup_totp():
 
     return render_template('setup_totp.html', user=session.get('username'), nav_current='setup2fa', img_b64=img_b64, secret=secret)
 
-@app.route('/verify-totp', methods=['GET', 'POST'])
-def verify_totp():
-    if 'tmp_user' not in session:
+@app.route('/setup-email-otp', methods=['GET', 'POST'])
+def setup_email_otp():
+    if "username" not in session:
+        return redirect(url_for('login'))
+    username = session.get('username')
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
+    account = cursor.fetchone()
+    cursor.execute("SELECT * FROM account_settings WHERE user_id = %s", (account['id'],))
+    settings = cursor.fetchone()
+    secret = None  # Initialize 'secret' to None
+    if request.method == 'POST':
+        token = request.form['token']
+        if pyotp.TOTP(settings['2fa_token_email_totp'], interval=120).verify(token):
+            cursor.execute("UPDATE account_settings SET 2fa_token_email = 1 WHERE user_id = %s", (account['id'],))
+            mysql.connection.commit()
+            session['2fa'] = True
+            global current_2fa_email_status
+            current_2fa_email_status = True
+            flash('Email OTP setup successful!', 'success')
+            return redirect(url_for('home'))
+        else:
+            flash('Invalid token', 'warning')
+    else:
+        if settings and settings['2fa_token_email_totp']:
+            secret = settings['2fa_token_email_totp']
+        else:
+            secret = pyotp.random_base32()
+            cursor.execute("UPDATE account_settings SET 2fa_token_email_totp = %s WHERE user_id = %s", (secret, account['id'],))
+            mysql.connection.commit()
+        # Send OTP to user's email
+        otp = pyotp.TOTP(secret, interval=120).now()
+        send_otp_email(account['email'], otp)
+        flash('Email OTP sent. Please check your email.', 'info')
+    cursor.close()
+    return render_template('setup_email_otp.html', user=session.get('username'), nav_current='setup2fa_email', secret=secret)
+
+@app.route('/verify-otp', methods=['GET', 'POST'])
+def verify_otp():
+    global current_2fa_totp_status
+    global current_2fa_email_status
+    if "tmp_user" not in session and "username" not in session:
         return redirect(url_for('login'))
 
-    username = session['tmp_user']['username']
+    username = session.get('tmp_user', {}).get('username') or session.get('username')
 
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute("SELECT * FROM accounts WHERE username = %s", (username,))
@@ -567,19 +640,50 @@ def verify_totp():
 
     if request.method == 'POST':
         token = request.form['token']
-        if pyotp.TOTP(settings['2fa_token_totp']).verify(token):
+        totp_valid = settings['2fa_token_totp'] and pyotp.TOTP(settings['2fa_token_totp']).verify(token)
+        email_valid = settings['2fa_token_email'] and pyotp.TOTP(settings['2fa_token_email_totp'], interval=120).verify(token)
+
+        if totp_valid or email_valid:
             session['2fa'] = True
-            global current_2fa_status
-            current_2fa_status = True
+            if totp_valid:
+                current_2fa_totp_status = True
+            if email_valid:
+                current_2fa_email_status = True
             session['username'] = username
             session['user'] = session['tmp_user']
             del session['tmp_user']
+            session.pop('previous_otp', None)
             flash('Login successful!', 'success')
             return redirect(url_for('home'))
         else:
             flash('Invalid token', 'warning')
 
-    return render_template('verify_totp.html')
+    if not settings['2fa_token_totp']:
+        if settings['2fa_token_email']:
+            secret = settings['2fa_token_email_totp']
+            otp = pyotp.TOTP(secret, interval=120).now()
+            if otp != session.get('previous_otp'):
+                send_otp_email(account['email'], otp)
+                flash('Email OTP sent. Please check your email.', 'info')
+                session['previous_otp'] = otp
+            else:
+                flash('OTP is the same as the previous one. No new email sent.', 'info')
+        else:
+            flash('No OTP method available.', 'danger')
+
+    cursor.close()
+
+    if settings['2fa_token_totp']:
+        otp_type = 'TOTP'
+    elif settings['2fa_token_email']:
+        otp_type = 'Email'
+    else:
+        otp_type = None
+
+    if otp_type is None:
+        return redirect(url_for('home'))
+
+    return render_template('verify_totp.html', user=session.get('username'), otp_type=otp_type)
 
 @app.route('/oauth-username', methods=['GET', 'POST'])
 def oauth_username():
@@ -663,10 +767,29 @@ def resize_image():
 
     return send_file(img_io, mimetype='image/png')
 
+@app.before_request
+def check_2fa_status():
+    if 'session_id' in session:
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("SELECT * FROM user_sessions WHERE session_id = %s", (session['session_id'],))
+        user_session = cursor.fetchone()
+        user = session.get('username')
+
+        if user_session:
+            cursor.execute("SELECT * FROM account_settings WHERE user_id = %s", (user_session['user_id'],))
+            settings = cursor.fetchone()
+            global current_2fa_totp_status
+            global current_2fa_email_status
+            current_2fa_totp_status = bool(settings['2fa_token_totp'])
+            current_2fa_email_status = bool(settings['2fa_token_email'])
+        cursor.close()
+
 @app.route("/logout")
 def logout():
-    global current_2fa_status
-    current_2fa_status = None
+    global current_2fa_totp_status
+    current_2fa_totp_status = None
+    global current_2fa_email_status
+    current_2fa_email_status = None
     session['2fa'] = None
     session['username'] = None
     session['user'] = None

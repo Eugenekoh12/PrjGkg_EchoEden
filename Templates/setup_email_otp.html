@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Verify TOTP{% endblock %}
+{% block title %}Setup Email OTP{% endblock %}
 {% block notif_notify %}
     {% with messages = get_flashed_messages() %}
             {% if messages %}
@@ -21,11 +21,13 @@
 {% endblock %}
 
 {% block content %}
-    <h1>Verify {% if otp_type == 'TOTP' %}TOTP{% elif otp_type == 'Email' %}Email OTP{% endif %}</h1>
-    <form method="POST">
-
-        <label for="token">Enter the current {% if otp_type == 'TOTP' %}TOTP from your 2FA app{% elif otp_type == 'Email' %}OTP from your email{% endif %}:</label>
-        <input type="text" id="token" name="token">
-        <input type="submit" value="Verify">
-    </form>
+        <h1>Setup Email OTP</h1>
+        <form method="POST" action="{{ url_for('setup_email_otp') }}">
+            <div class="form-group">
+                <label for="token">Please enter OTP sent to your email {{ user }}</label>
+                <input type="text" id="token" name="token" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Verify OTP</button>
+        </form>
+        <p>If you did not receive the OTP, please check your spam folder or <a href="{{ url_for('setup_email_otp') }}">try again</a>.</p>
 {% endblock %}
