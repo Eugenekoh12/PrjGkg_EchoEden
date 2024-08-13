@@ -62,20 +62,24 @@ def inject_now():
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'session_id' not in session:
-            return redirect(url_for('login'))
+        if 'user_id' not in session:
+            # Redirect to login page if user is not in session
+            return redirect(url_for('login', next=request.url))
 
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM user_sessions WHERE session_id = %s", (session['session_id'],))
+        cursor.execute("SELECT * FROM user_sessions WHERE user_id = %s AND status = 'active' ORDER BY last_activity DESC LIMIT 1", (session['user_id'],))
         user_session = cursor.fetchone()
 
         if not user_session:
-            return redirect(url_for('login'))
+            # Clear session and redirect to login if no active session found
+            session.clear()
+            return redirect(url_for('login', next=request.url))
 
         # Update last activity
         cursor.execute("UPDATE user_sessions SET last_activity = CURRENT_TIMESTAMP WHERE session_id = %s",
-                       (session['session_id'],))
+                       (user_session['session_id'],))
         mysql.connection.commit()
+        cursor.close()
 
         return f(*args, **kwargs)
 
@@ -172,7 +176,7 @@ def login():
                     cursor.execute("SELECT * FROM account_settings WHERE user_id = %s", (account['id'],))
                     settings = cursor.fetchone()
 
-                    if settings['2fa_token_totp'] or settings['2fa_token_email']:
+                    if settings and (settings.get('2fa_token_totp') or settings.get('2fa_token_email')):
                         session['tmp_user'] = {
                             'username': account['username'],
                             'user_id': account['id']
@@ -196,8 +200,6 @@ def login():
             flash('Invalid username or password', 'warning')
 
     return render_template('login.html', nav_current='login', title='Login', user=user)
-
-
 
 def send_login_notification(email, success, ip_address, login_type):
     status = "successful" if success else "failed"
@@ -791,17 +793,31 @@ def logout():
 for rule in app.url_map.iter_rules():
     print(rule)
 
+
 class User(UserMixin):
-    def _init_(self, id, username, password, login_attempts, is_locked):
-        self.id = id
-        self.username = username
-        self.password = password
-        self.login_attempts = login_attempts
-        self.is_locked = is_locked
+    def __init__(self, *args, **kwargs):
+        if args:
+            # If positional arguments are provided, assume they're in the order:
+            # id, username, password_hash, email, settings_id
+            self.id = args[0]
+            self.username = args[1]
+            self.password = args[2]
+            self.email = args[3] if len(args) > 3 else None
+            self.settings_id = args[4] if len(args) > 4 else None
+        else:
+            # If keyword arguments are provided
+            self.id = kwargs.get('id')
+            self.username = kwargs.get('username')
+            self.password = kwargs.get('password_hash')
+            self.email = kwargs.get('email')
+            self.settings_id = kwargs.get('settings_id')
+
+        self.login_attempts = kwargs.get('login_attempts', 0)
+        self.is_locked = kwargs.get('is_locked', False)
 
     @staticmethod
     def get_user_by_username(username):
-        cursor = mysql.connection.cursor()
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute("SELECT * FROM accounts WHERE username = %s", [username])
         user_data = cursor.fetchone()
         cursor.close()
@@ -811,17 +827,22 @@ class User(UserMixin):
 
     def update_login_attempts(self):
         cursor = mysql.connection.cursor()
-        cursor.execute("UPDATE accounts SET login_attempts = %s, is_locked = %s WHERE id = %s",
-                       (self.login_attempts, self.is_locked, self.id))
-        mysql.connection.commit()
-        cursor.close()
+        try:
+            cursor.execute("UPDATE accounts SET login_attempts = %s, is_locked = %s WHERE id = %s",
+                           (self.login_attempts, self.is_locked, self.id))
+            mysql.connection.commit()
+        except MySQLdb.OperationalError:
+            # If the columns don't exist, we'll skip the update
+            pass
+        finally:
+            cursor.close()
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 
 @login_manager.user_loader
 def load_user(user_id):
-    cursor = mysql.connection.cursor()
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute("SELECT * FROM accounts WHERE id = %s", [user_id])
     user_data = cursor.fetchone()
     cursor.close()
